@@ -1,0 +1,167 @@
+# AI智能体量化交易系统配置文件
+
+# 数据源配置
+data:
+  # Tushare (A股)
+  tushare:
+    token: "YOUR_TUSHARE_TOKEN"
+    pro_api: "http://api.tushare.pro"
+
+  # yfinance (美股)
+  yfinance:
+    enabled: true
+
+  # CCXT (加密货币)
+  ccxt:
+    exchanges:
+      - binance
+      - okx
+
+# LLM配置
+llm:
+  provider: "openai"  # openai, zhipuai, local
+  openai:
+    api_key: "YOUR_OPENAI_API_KEY"
+    model: "gpt-4-turbo-preview"
+    temperature: 0.7
+
+  zhipuai:
+    api_key: "YOUR_ZHIPUAI_API_KEY"
+    model: "glm-4-turbo"
+
+# 交易所配置
+trading:
+  # 模拟交易
+  paper_trading:
+    enabled: true
+    initial_capital: 100000
+
+  # 实盘交易
+  live_trading:
+    enabled: false  # 实盘前请确保充分测试
+
+    # 券商/交易所配置
+    ib:
+      enabled: false
+      host: "127.0.0.1"
+      port: 7497
+      client_id: 1
+
+    okx:
+      enabled: false
+      api_key: "YOUR_OKX_API_KEY"
+      secret: "YOUR_OKX_SECRET"
+      passphrase: "YOUR_OKX_PASSPHRASE"
+      sandbox: true
+
+    binance:
+      enabled: false
+      api_key: "YOUR_BINANCE_API_KEY"
+      secret: "YOUR_BINANCE_SECRET"
+      testnet: true
+
+# 策略配置
+strategy:
+  # 默认参数
+  default:
+    risk_per_trade: 0.02  # 每笔交易风险2%
+    max_position_size: 0.3  # 最大仓位30%
+    stop_loss: 0.05  # 默认止损5%
+    take_profit: 0.1  # 默认止盈10%
+
+  # 趋势策略
+  trend:
+    short_ma: 20
+    long_ma: 60
+    adx_threshold: 20
+
+  # 均值回归
+  mean_reversion:
+    rsi_overbought: 70
+    rsi_oversold: 30
+    bb_period: 20
+
+# 优化配置
+optimization:
+  # 强化学习
+  reinforcement_learning:
+    enabled: true
+    algorithm: "PPO"  # PPO, A2C, DQN
+    total_timesteps: 1000000
+    eval_freq: 10000
+
+  # 遗传算法
+  genetic:
+    population_size: 50
+    generations: 20
+    mutation_rate: 0.1
+
+  # 网格搜索
+  grid_search:
+    enabled: false  # 耗时较长，谨慎使用
+
+# 回测配置
+backtest:
+  initial_capital: 100000
+  commission: 0.001  # 0.1%手续费
+  slippage: 0.0001
+  benchmark: "SPY"
+
+# 风控配置
+risk:
+  max_drawdown: 0.2  # 最大回撤20%
+  daily_loss_limit: 0.05  # 日亏损限制5%
+  max_positions: 10  # 最大持仓数
+  volatility_adjustment: true  # 根据波动率调整仓位
+
+# 日志配置
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "logs/quant_agent.log"
+  rotation: "10 MB"
+  retention: "30 days"
+
+# 数据库配置
+database:
+  type: "postgresql"  # postgresql, sqlite
+  postgresql:
+    host: "localhost"
+    port: 5432
+    database: "ai_quant"
+    username: "quant_user"
+    password: "your_password"
+
+  redis:
+    host: "localhost"
+    port: 6379
+    db: 0
+
+# API服务配置
+api:
+  host: "0.0.0.0"
+  port: 8000
+  debug: false
+  api_key: "YOUR_API_KEY"  # 保护API接口
+
+# 监控与告警
+monitoring:
+  enabled: true
+  email:
+    enabled: false
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    sender: "your_email@gmail.com"
+    password: "your_app_password"
+    recipients:
+      - "your_email@gmail.com"
+
+  telegram:
+    enabled: false
+    bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
+    chat_id: "YOUR_CHAT_ID"
+
+# 多智能体配置
+multi_agent:
+  enabled: true
+  num_agents: 20  # 对抗训练的智能体数量
+  episodes: 1000  # 训练回合数
