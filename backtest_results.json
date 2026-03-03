@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-03-03T16:32:58.789634",
+  "best_config": {
+    "ma_short": 5,
+    "ma_long": 30,
+    "rsi_oversold": 30,
+    "rsi_overbought": 70,
+    "atr_stop": 2.5,
+    "atr_trail": 1.5,
+    "adx_threshold": 20,
+    "volume_mult": 1.2,
+    "max_position": 0.2,
+    "min_signal_strength": 0.5
+  },
+  "results": [
+    {
+      "total_return": 0.0429273587172004,
+      "sharpe_ratio": 1.1557845580792594,
+      "max_drawdown": -0.012498885901589252,
+      "win_rate": 0.6875
+    },
+    {
+      "total_return": 0.0429273587172004,
+      "sharpe_ratio": 1.1557845580792594,
+      "max_drawdown": -0.012498885901589252,
+      "win_rate": 0.6875
+    },
+    {
+      "total_return": 0.0429273587172004,
+      "sharpe_ratio": 1.1557845580792594,
+      "max_drawdown": -0.012498885901589252,
+      "win_rate": 0.6875
+    },
+    {
+      "total_return": 0.023512143848156992,
+      "sharpe_ratio": 0.6645589573855191,
+      "max_drawdown": -0.01191105708381849,
+      "win_rate": 0.5
+    },
+    {
+      "total_return": 0.0429273587172004,
+      "sharpe_ratio": 1.1557845580792594,
+      "max_drawdown": -0.012498885901589252,
+      "win_rate": 0.6875
+    }
+  ]
+}

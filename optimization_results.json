@@ -1,0 +1,115 @@
+{
+  "timestamp": "2026-03-03T16:25:53.545743",
+  "stocks": {
+    "600519": {
+      "params": {
+        "ma_short": 10,
+        "ma_long": 31,
+        "rsi_oversold": 28,
+        "rsi_overbought": 73,
+        "atr_stop_mult": 2.32,
+        "atr_trail_mult": 1.74,
+        "adx_threshold": 19,
+        "volume_mult": 1.92,
+        "max_position": 0.42,
+        "min_confidence": 0.64
+      },
+      "result": {
+        "total_return": 0.0,
+        "sharpe_ratio": 0,
+        "max_drawdown": 0.0,
+        "win_rate": 0,
+        "trades": 0,
+        "final_equity": 100000
+      }
+    },
+    "000858": {
+      "params": {
+        "ma_short": 8,
+        "ma_long": 41,
+        "rsi_oversold": 21,
+        "rsi_overbought": 77,
+        "atr_stop_mult": 2.73,
+        "atr_trail_mult": 1.53,
+        "adx_threshold": 30,
+        "volume_mult": 1.95,
+        "max_position": 0.27,
+        "min_confidence": 0.64
+      },
+      "result": {
+        "total_return": 0.0,
+        "sharpe_ratio": 0,
+        "max_drawdown": 0.0,
+        "win_rate": 0,
+        "trades": 0,
+        "final_equity": 100000
+      }
+    },
+    "002594": {
+      "params": {
+        "ma_short": 14,
+        "ma_long": 37,
+        "rsi_oversold": 21,
+        "rsi_overbought": 69,
+        "atr_stop_mult": 2.35,
+        "atr_trail_mult": 1.05,
+        "adx_threshold": 24,
+        "volume_mult": 1.68,
+        "max_position": 0.38,
+        "min_confidence": 0.7
+      },
+      "result": {
+        "total_return": 0.0,
+        "sharpe_ratio": 0,
+        "max_drawdown": 0.0,
+        "win_rate": 0,
+        "trades": 0,
+        "final_equity": 100000
+      }
+    },
+    "601318": {
+      "params": {
+        "ma_short": 12,
+        "ma_long": 40,
+        "rsi_oversold": 28,
+        "rsi_overbought": 74,
+        "atr_stop_mult": 1.54,
+        "atr_trail_mult": 1.28,
+        "adx_threshold": 22,
+        "volume_mult": 1.96,
+        "max_position": 0.36,
+        "min_confidence": 0.78
+      },
+      "result": {
+        "total_return": 0.0,
+        "sharpe_ratio": 0,
+        "max_drawdown": 0.0,
+        "win_rate": 0,
+        "trades": 0,
+        "final_equity": 100000
+      }
+    },
+    "000001": {
+      "params": {
+        "ma_short": 5,
+        "ma_long": 46,
+        "rsi_oversold": 24,
+        "rsi_overbought": 65,
+        "atr_stop_mult": 2.87,
+        "atr_trail_mult": 2.4,
+        "adx_threshold": 22,
+        "volume_mult": 1.95,
+        "max_position": 0.29,
+        "min_confidence": 0.76
+      },
+      "result": {
+        "total_return": 0.0,
+        "sharpe_ratio": 0,
+        "max_drawdown": 0.0,
+        "win_rate": 0,
+        "trades": 0,
+        "final_equity": 100000
+      }
+    }
+  }
+}

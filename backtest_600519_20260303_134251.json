@@ -1,0 +1,10 @@
+{
+  "symbol": "600519",
+  "strategy": "combo",
+  "total_return": 0.033938350116186046,
+  "annual_return": 0.05295278530550962,
+  "sharpe_ratio": 2.849635993829815,
+  "max_drawdown": -0.006522138903473354,
+  "win_rate": 0.5,
+  "total_trades": 12
+}
