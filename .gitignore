@@ -20,11 +20,10 @@ wheels/
 .installed.cfg
 *.egg
 
-# 虚拟环境
+# Virtual Environment
 venv/
-env/
 ENV/
-.venv
+env/
 
 # IDE
 .vscode/
@@ -33,46 +32,31 @@ ENV/
 *.swo
 *~
 
-# 日志
-logs/
-*.log
-
-# 配置文件（包含敏感信息）
-config/config.yaml
-config/local.yaml
-.env
-
-# 数据
-data/*.csv
-data/*.parquet
-data/*.h5
-!data/.gitkeep
+# Jupyter Notebook
+.ipynb_checkpoints
 
 # 临时文件
+*.log
 *.tmp
-*.bak
-*.swp
+.DS_Store
 
-# Jupyter Notebook
-.ipynb_checkpoints/
+# 测试报告（保留final_test_report.json）
+test_report.json
+auto_run_report.json
+paper_trading_result.json
+strategy_report.json
 
-# 测试
-.pytest_cache/
-.coverage
-htmlcov/
+# 数据文件（保留示例数据）
+data/backup/
+data/temp/
 
 # 模型文件
-models/
 *.pkl
+*.pickle
 *.h5
-*.pt
-*.pth
+*.model
 
-# 操作系统
-.DS_Store
-Thumbs.db
-
-# 交易相关
-trades/*.csv
-orders/*.json
-!data/.gitkeep
+# 配置文件（敏感信息）
+config/secrets.yaml
+config/api_keys.yaml
+.env
