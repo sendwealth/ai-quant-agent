@@ -32,31 +32,34 @@ env/
 *.swo
 *~
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# 临时文件
-*.log
-*.tmp
+# OS
 .DS_Store
+Thumbs.db
 
-# 测试报告（保留final_test_report.json）
-test_report.json
-auto_run_report.json
-paper_trading_result.json
-strategy_report.json
+# Logs
+logs/
+*.log
 
-# 数据文件（保留示例数据）
-data/backup/
-data/temp/
+# Data (large files)
+data/*.csv
+!data/.gitkeep
 
-# 模型文件
-*.pkl
-*.pickle
-*.h5
-*.model
+# Temporary
+*.tmp
+*.bak
+*.backup
 
-# 配置文件（敏感信息）
-config/secrets.yaml
-config/api_keys.yaml
-.env
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Coverage
+.coverage
+htmlcov/
+
+# Distribution
+*.tar.gz
+*.zip
+
+# Archive (optional - uncomment if you don't want to track archived files)
+# .archive/
