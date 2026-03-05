@@ -1,0 +1,28 @@
+{
+  "test_time": "2026-03-04T19:42:55.496998",
+  "improvements": {
+    "volatility_filter": true,
+    "max_volatility": 0.035,
+    "base_position_reduced": true,
+    "hengrui_weight_increased": true
+  },
+  "original": {
+    "portfolio_sharpe": 0.6463359781218014,
+    "portfolio_return": 0.15493697999999992
+  },
+  "improved": {
+    "portfolio_sharpe": 0.5943864382449784,
+    "portfolio_return": 0.08971452499999993,
+    "total_filtered_trades": 152
+  },
+  "improvement": {
+    "sharpe_change": -0.05194953987682305,
+    "return_change": -0.06522245499999998
+  },
+  "new_weights": {
+    "宁德时代": 0.35,
+    "立讯精密": 0.25,
+    "中国平安": 0.2,
+    "恒瑞医药": 0.2
+  }
+}

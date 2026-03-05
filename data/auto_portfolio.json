@@ -1,0 +1,77 @@
+{
+  "update_time": "2026-03-05T21:48:55.877122",
+  "initial_capital": 100000,
+  "cash": 52547.0,
+  "positions": {
+    "600309.SH": {
+      "name": "万华化学",
+      "shares": 100,
+      "cost_price": 89.2,
+      "current_price": 89.2,
+      "buy_date": "2026-03-05"
+    },
+    "600900.SH": {
+      "name": "长江电力",
+      "shares": 500,
+      "cost_price": 27.08,
+      "current_price": 27.08,
+      "buy_date": "2026-03-05"
+    },
+    "600036.SH": {
+      "name": "招商银行",
+      "shares": 300,
+      "cost_price": 39.15,
+      "current_price": 39.15,
+      "buy_date": "2026-03-05"
+    },
+    "600031.SH": {
+      "name": "三一重工",
+      "shares": 600,
+      "cost_price": 22.08,
+      "current_price": 22.08,
+      "buy_date": "2026-03-05"
+    }
+  },
+  "trades": [
+    {
+      "date": "2026-03-05 21:48",
+      "action": "BUY",
+      "code": "600309.SH",
+      "name": "万华化学",
+      "shares": 100,
+      "price": 89.2,
+      "amount": 8920.0,
+      "reason": "MULTI_FACTOR_SELECTION"
+    },
+    {
+      "date": "2026-03-05 21:48",
+      "action": "BUY",
+      "code": "600900.SH",
+      "name": "长江电力",
+      "shares": 500,
+      "price": 27.08,
+      "amount": 13540.0,
+      "reason": "MULTI_FACTOR_SELECTION"
+    },
+    {
+      "date": "2026-03-05 21:48",
+      "action": "BUY",
+      "code": "600036.SH",
+      "name": "招商银行",
+      "shares": 300,
+      "price": 39.15,
+      "amount": 11745.0,
+      "reason": "MULTI_FACTOR_SELECTION"
+    },
+    {
+      "date": "2026-03-05 21:48",
+      "action": "BUY",
+      "code": "600031.SH",
+      "name": "三一重工",
+      "shares": 600,
+      "price": 22.08,
+      "amount": 13247.999999999998,
+      "reason": "MULTI_FACTOR_SELECTION"
+    }
+  ]
+}
