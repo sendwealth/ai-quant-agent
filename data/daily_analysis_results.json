@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-03-10T22:01:33.715475",
+  "signals": {
+    "300750": {
+      "name": "宁德时代",
+      "signal": "HOLD",
+      "price": 344.07,
+      "change_pct": 0
+    },
+    "002475": {
+      "name": "立讯精密",
+      "signal": "SELL",
+      "price": 47.39,
+      "change_pct": 0
+    },
+    "601318": {
+      "name": "中国平安",
+      "signal": "SELL",
+      "price": 62.57,
+      "change_pct": 0
+    },
+    "600276": {
+      "name": "恒瑞医药",
+      "signal": "SELL",
+      "price": 53.61,
+      "change_pct": 0
+    }
+  },
+  "positions": {},
+  "alerts": [],
+  "summary": {
+    "total_stocks": 4,
+    "buy_count": 0,
+    "sell_count": 3,
+    "alert_count": 0,
+    "performance": {
+      "total_value": 52547.0,
+      "total_return": -0.47453,
+      "cash_ratio": 1.0
+    }
+  }
+}
