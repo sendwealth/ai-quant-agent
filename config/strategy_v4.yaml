@@ -1,0 +1,85 @@
+# V4策略配置
+# Strategy V4 Configuration
+
+strategy:
+  name: "V4 Enhanced"
+  version: "4.1"
+  type: "ma"
+  description: "基于MA金叉/死叉 + MACD确认 + RSI过滤的趋势跟踪策略"
+
+# 股票池配置
+stocks:
+  - code: "300750"
+    name: "宁德时代"
+    weight: 0.45
+    params:
+      ma_fast: 10
+      ma_slow: 35
+      atr_stop: 2.0
+    enabled: true
+  
+  - code: "002475"
+    name: "立讯精密"
+    weight: 0.30
+    params:
+      ma_fast: 10
+      ma_slow: 35
+      atr_stop: 3.0
+    enabled: true
+  
+  - code: "601318"
+    name: "中国平安"
+    weight: 0.15
+    params:
+      ma_fast: 8
+      ma_slow: 25
+      atr_stop: 2.5
+    enabled: true
+  
+  - code: "600276"
+    name: "恒瑞医药"
+    weight: 0.10
+    params:
+      ma_fast: 8
+      ma_slow: 30
+      atr_stop: 2.0
+    enabled: true
+
+# 风险控制参数
+risk:
+  stop_loss: -0.08          # 止损 -8%
+  take_profit_1: 0.10       # 止盈1 +10% (卖50%)
+  take_profit_2: 0.20       # 止盈2 +20% (清仓)
+  max_position: 0.15        # 单股最大仓位 15%
+  max_drawdown: 0.15        # 最大回撤 15%
+
+# 资金管理
+capital:
+  initial: 100000           # 初始资金 10万
+  reserve_ratio: 0.10       # 现金储备 10%
+
+# 数据源配置
+data:
+  source: "tushare"         # 数据源: tushare/yfinance
+  update_interval: 1        # 数据更新间隔(天)
+  lookback_days: 100        # 回溯天数
+
+# 监控配置
+monitor:
+  enabled: true
+  alert_channels:
+    - "feishu"
+  check_interval: 30        # 检查间隔(分钟)
+
+# 回测配置
+backtest:
+  commission: 0.0003        # 手续费 0.03%
+  slippage: 0.0001          # 滑点 0.01%
+  benchmark: "000300.SH"    # 基准指数
+
+# 日志配置
+logging:
+  level: "INFO"
+  file: "logs/strategy.log"
+  max_size: "10MB"
+  backup_count: 5
