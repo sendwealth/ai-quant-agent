@@ -1,0 +1,38 @@
+{
+  "timestamp": "2026-03-10T21:35:00",
+  "status": "initialized",
+  "market": {
+    "trend": "UNKNOWN",
+    "sentiment": "NEUTRAL",
+    "indices": []
+  },
+  "positions": [],
+  "signals": {
+    "buy": [],
+    "sell": [],
+    "hold": []
+  },
+  "alerts": [],
+  "summary": {
+    "total_stocks": 5,
+    "buy_count": 0,
+    "sell_count": 0,
+    "alert_count": 0,
+    "market_trend": "UNKNOWN",
+    "market_sentiment": "NEUTRAL",
+    "last_check": "2026-03-10T21:35:00",
+    "next_check": "心跳触发时"
+  },
+  "watch_list": [
+    {"code": "600900", "name": "长江电力", "role": "core"},
+    {"code": "002594", "name": "比亚迪", "role": "core"},
+    {"code": "300750", "name": "宁德时代", "role": "core"},
+    {"code": "600309", "name": "万华化学", "role": "satellite"},
+    {"code": "600036", "name": "招商银行", "role": "satellite"}
+  ],
+  "risk_params": {
+    "stop_loss": -0.05,
+    "take_profit_1": 0.10,
+    "take_profit_2": 0.20
+  }
+}
