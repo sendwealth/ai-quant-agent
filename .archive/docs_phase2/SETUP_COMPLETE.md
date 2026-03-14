@@ -33,10 +33,10 @@
 
 ```bash
 # 每日自动运行（15:30，周一到周五）
-30 15 * * 1-5 cd /Users/rowan/clawd/ai-quant-agent && ./daily_run.sh >> logs/auto_trading.log 2>&1
+30 15 * * 1-5 cd /Users/rowan/clawd/projects/ai-quant-agent && ./daily_run.sh >> logs/auto_trading.log 2>&1
 
 # 每周数据更新（周日18:00）
-0 18 * * 0 cd /Users/rowan/clawd/ai-quant-agent && python3 examples/fetch_tushare_auto.py >> logs/data_update.log 2>&1
+0 18 * * 0 cd /Users/rowan/clawd/projects/ai-quant-agent && python3 examples/fetch_tushare_auto.py >> logs/data_update.log 2>&1
 ```
 
 ---

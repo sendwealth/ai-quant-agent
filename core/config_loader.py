@@ -24,7 +24,7 @@ class ConfigLoader:
             config_path: 配置文件路径
         """
         if config_path is None:
-            config_path = Path(__file__).parent.parent / 'config' / 'strategy_v4.yaml'
+            config_path = Path(__file__).parent.parent / 'config' / 'strategy_v5.yaml'
         
         self.config_path = Path(config_path)
         self.config = self._load_config()

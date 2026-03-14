@@ -163,17 +163,17 @@
 
 ### 方式1: 查看文件
 ```bash
-cat /Users/rowan/clawd/ai-quant-agent/data/auto_portfolio.json
+cat /Users/rowan/clawd/projects/ai-quant-agent/data/auto_portfolio.json
 ```
 
 ### 方式2: 查看日志
 ```bash
-tail -50 /Users/rowan/clawd/ai-quant-agent/logs/upgraded_trading.log
+tail -50 /Users/rowan/clawd/projects/ai-quant-agent/logs/upgraded_trading.log
 ```
 
 ### 方式3: 运行报告
 ```bash
-python3 /Users/rowan/clawd/ai-quant-agent/examples/upgraded_auto_trading_bot.py
+python3 /Users/rowan/clawd/projects/ai-quant-agent/examples/upgraded_auto_trading_bot.py
 ```
 
 ---

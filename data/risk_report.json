@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-03-13T12:28:06.217223",
+  "portfolio": {
+    "cash": 7231.5,
+    "position_value": 2768.5,
+    "total_value": 10000.0
+  },
+  "position_alerts": [],
+  "portfolio_alerts": [],
+  "market": {
+    "sentiment": "NEUTRAL",
+    "message": "市场中性，信号分化",
+    "buy_count": 1,
+    "sell_count": 2,
+    "hold_count": 1
+  },
+  "total_alerts": 0
+}

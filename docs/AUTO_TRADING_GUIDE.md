@@ -45,7 +45,7 @@ python3 examples/auto_trading_bot.py
 crontab -e
 
 # 添加以下行（每天15:30自动运行）
-30 15 * * 1-5 cd /Users/rowan/clawd/ai-quant-agent && /usr/bin/python3 examples/auto_trading_bot.py >> logs/auto_trading.log 2>&1
+30 15 * * 1-5 cd /Users/rowan/clawd/projects/ai-quant-agent && /usr/bin/python3 examples/auto_trading_bot.py >> logs/auto_trading.log 2>&1
 ```
 
 #### Windows
@@ -252,7 +252,7 @@ def send_notification(self, message):
 # 创建数据更新脚本
 # update_data.sh
 #!/bin/bash
-cd /Users/rowan/clawd/ai-quant-agent
+cd /Users/rowan/clawd/projects/ai-quant-agent
 python3 examples/fetch_tushare_auto.py
 python3 examples/auto_trading_bot.py
 ```
@@ -381,7 +381,7 @@ crontab -e
 
 ```bash
 # 1. 进入目录
-cd /Users/rowan/clawd/ai-quant-agent
+cd /Users/rowan/clawd/projects/ai-quant-agent
 
 # 2. 运行机器人
 python3 examples/auto_trading_bot.py
@@ -391,7 +391,7 @@ cat data/auto_portfolio.json
 
 # 4. 设置每日自动运行（可选）
 crontab -e
-# 添加: 30 15 * * 1-5 cd /Users/rowan/clawd/ai-quant-agent && python3 examples/auto_trading_bot.py >> logs/auto_trading.log 2>&1
+# 添加: 30 15 * * 1-5 cd /Users/rowan/clawd/projects/ai-quant-agent && python3 examples/auto_trading_bot.py >> logs/auto_trading.log 2>&1
 ```
 
 ---

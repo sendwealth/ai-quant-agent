@@ -1,136 +1,45 @@
 {
-  "timestamp": "2026-03-04T09:44:21.057700",
-  "total_tests": 144,
-  "best_params": {
-    "ma_fast": 5,
-    "ma_slow": 25,
-    "atr_stop_mult": 2.5,
-    "atr_trail_mult": 2.0,
-    "use_dynamic_position": true,
-    "use_macd": true,
-    "use_rsi": true,
-    "take_profit_1": 0.1,
-    "take_profit_2": 0.2,
-    "partial_exit_1": 0.5,
-    "partial_exit_2": 0.5
-  },
-  "best_result": {
-    "sharpe": 0.6728490126951915,
-    "return": 0.04469871326435998,
-    "win_rate": 0.9166666666666666,
-    "max_dd": -0.03262300170798128,
-    "trades": 12
-  },
-  "top_10": [
-    {
-      "ma_fast": 5,
-      "ma_slow": 25,
-      "atr_stop": 2.5,
-      "position": 0.25,
-      "sharpe": 0.6728490126951915,
-      "return": 0.04469871326435998,
-      "win_rate": 0.9166666666666666,
-      "max_dd": -0.03262300170798128,
-      "trades": 12
+  "timestamp": "2026-03-11T11:41:18.106015",
+  "results": {
+    "300750": {
+      "code": "300750",
+      "params": {
+        "ma_fast": 10,
+        "ma_slow": 35,
+        "atr_stop": 1.5
+      },
+      "sharpe": 35.218714750512795,
+      "return": 15.718625648281192
     },
-    {
-      "ma_fast": 5,
-      "ma_slow": 25,
-      "atr_stop": 2.5,
-      "position": 0.3,
-      "sharpe": 0.6728490126951915,
-      "return": 0.04469871326435998,
-      "win_rate": 0.9166666666666666,
-      "max_dd": -0.03262300170798128,
-      "trades": 12
+    "002475": {
+      "code": "002475",
+      "params": {
+        "ma_fast": 15,
+        "ma_slow": 20,
+        "atr_stop": 1.5
+      },
+      "sharpe": 37.07293543219309,
+      "return": 22.18906042583185
     },
-    {
-      "ma_fast": 5,
-      "ma_slow": 25,
-      "atr_stop": 2.5,
-      "position": 0.35,
-      "sharpe": 0.6728490126951915,
-      "return": 0.04469871326435998,
-      "win_rate": 0.9166666666666666,
-      "max_dd": -0.03262300170798128,
-      "trades": 12
+    "601318": {
+      "code": "601318",
+      "params": {
+        "ma_fast": 7,
+        "ma_slow": 30,
+        "atr_stop": 3.0
+      },
+      "sharpe": 9.566294283863192,
+      "return": 2.1807785204208745
     },
-    {
-      "ma_fast": 12,
-      "ma_slow": 20,
-      "atr_stop": 2.5,
-      "position": 0.25,
-      "sharpe": 0.5857400784268667,
-      "return": 0.037947043483456074,
-      "win_rate": 1.0,
-      "max_dd": -0.030733536683692737,
-      "trades": 10
-    },
-    {
-      "ma_fast": 12,
-      "ma_slow": 20,
-      "atr_stop": 2.5,
-      "position": 0.3,
-      "sharpe": 0.5857400784268667,
-      "return": 0.037947043483456074,
-      "win_rate": 1.0,
-      "max_dd": -0.030733536683692737,
-      "trades": 10
-    },
-    {
-      "ma_fast": 12,
-      "ma_slow": 20,
-      "atr_stop": 2.5,
-      "position": 0.35,
-      "sharpe": 0.5857400784268667,
-      "return": 0.037947043483456074,
-      "win_rate": 1.0,
-      "max_dd": -0.030733536683692737,
-      "trades": 10
-    },
-    {
-      "ma_fast": 12,
-      "ma_slow": 25,
-      "atr_stop": 2.5,
-      "position": 0.25,
-      "sharpe": 0.5458416270927442,
-      "return": 0.03245120888021848,
-      "win_rate": 0.7777777777777778,
-      "max_dd": -0.026542192151117625,
-      "trades": 9
-    },
-    {
-      "ma_fast": 12,
-      "ma_slow": 25,
-      "atr_stop": 2.5,
-      "position": 0.3,
-      "sharpe": 0.5458416270927442,
-      "return": 0.03245120888021848,
-      "win_rate": 0.7777777777777778,
-      "max_dd": -0.026542192151117625,
-      "trades": 9
-    },
-    {
-      "ma_fast": 12,
-      "ma_slow": 25,
-      "atr_stop": 2.5,
-      "position": 0.35,
-      "sharpe": 0.5458416270927442,
-      "return": 0.03245120888021848,
-      "win_rate": 0.7777777777777778,
-      "max_dd": -0.026542192151117625,
-      "trades": 9
-    },
-    {
-      "ma_fast": 8,
-      "ma_slow": 20,
-      "atr_stop": 2.5,
-      "position": 0.25,
-      "sharpe": 0.5178202434418887,
-      "return": 0.035164306450559527,
-      "win_rate": 0.9166666666666666,
-      "max_dd": -0.03599445196605113,
-      "trades": 12
+    "600276": {
+      "code": "600276",
+      "params": {
+        "ma_fast": 5,
+        "ma_slow": 20,
+        "atr_stop": 1.5
+      },
+      "sharpe": 24.43903193809983,
+      "return": 9.578589787347136
     }
-  ]
+  }
 }

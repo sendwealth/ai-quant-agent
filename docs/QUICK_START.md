@@ -10,7 +10,7 @@
 ### 1. 安装依赖
 
 ```bash
-cd ~/clawd/ai-quant-agent
+cd ~/clawd/projects/ai-quant-agent
 pip install -r requirements.txt
 ```
 
@@ -134,7 +134,7 @@ stocks:
 crontab -l
 
 # 已配置
-50 8 * * 1-5 cd ~/clawd/ai-quant-agent && python3 run.py
+50 8 * * 1-5 cd ~/clawd/projects/ai-quant-agent && python3 run.py
 ```
 
 ---

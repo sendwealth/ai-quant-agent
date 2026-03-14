@@ -43,7 +43,7 @@
 crontab -e
 
 # 2. 添加以下行（每天15:30自动运行）
-30 15 * * 1-5 cd /Users/rowan/clawd/ai-quant-agent && ./daily_run.sh >> logs/auto_trading.log 2>&1
+30 15 * * 1-5 cd /Users/rowan/clawd/projects/ai-quant-agent && ./daily_run.sh >> logs/auto_trading.log 2>&1
 
 # 3. 保存退出（vim: 按 ESC，输入 :wq，回车）
 
@@ -69,7 +69,7 @@ crontab -l
 crontab -e
 
 # 2. 添加以下行（每周日18:00更新数据）
-0 18 * * 0 cd /Users/rowan/clawd/ai-quant-agent && python3 examples/fetch_tushare_auto.py >> logs/data_update.log 2>&1
+0 18 * * 0 cd /Users/rowan/clawd/projects/ai-quant-agent && python3 examples/fetch_tushare_auto.py >> logs/data_update.log 2>&1
 
 # 3. 保存退出
 ```
@@ -135,7 +135,7 @@ fi
 crontab -e
 
 # 3. 在打开的编辑器中，添加这一行
-30 15 * * 1-5 cd /Users/rowan/clawd/ai-quant-agent && ./daily_run.sh >> logs/auto_trading.log 2>&1
+30 15 * * 1-5 cd /Users/rowan/clawd/projects/ai-quant-agent && ./daily_run.sh >> logs/auto_trading.log 2>&1
 
 # 4. 保存退出
 # vim: 按 ESC，输入 :wq，回车
@@ -149,14 +149,14 @@ crontab -l
 
 ```bash
 # 在同一个crontab中添加
-0 18 * * 0 cd /Users/rowan/clawd/ai-quant-agent && python3 examples/fetch_tushare_auto.py >> logs/data_update.log 2>&1
+0 18 * * 0 cd /Users/rowan/clawd/projects/ai-quant-agent && python3 examples/fetch_tushare_auto.py >> logs/data_update.log 2>&1
 ```
 
 ### 第3步：测试
 
 ```bash
 # 手动运行一次，确保一切正常
-cd /Users/rowan/clawd/ai-quant-agent
+cd /Users/rowan/clawd/projects/ai-quant-agent
 ./daily_run.sh
 
 # 查看日志
@@ -205,19 +205,19 @@ tail -20 logs/auto_trading.log
 crontab -l
 
 # 应该看到：
-# 30 15 * * 1-5 cd /Users/rowan/clawd/ai-quant-agent && ./daily_run.sh >> logs/auto_trading.log 2>&1
-# 0 18 * * 0 cd /Users/rowan/clawd/ai-quant-agent && python3 examples/fetch_tushare_auto.py >> logs/data_update.log 2>&1
+# 30 15 * * 1-5 cd /Users/rowan/clawd/projects/ai-quant-agent && ./daily_run.sh >> logs/auto_trading.log 2>&1
+# 0 18 * * 0 cd /Users/rowan/clawd/projects/ai-quant-agent && python3 examples/fetch_tushare_auto.py >> logs/data_update.log 2>&1
 ```
 
 ### 检查文件权限
 
 ```bash
 # 确保脚本有执行权限
-ls -la /Users/rowan/clawd/ai-quant-agent/daily_run.sh
+ls -la /Users/rowan/clawd/projects/ai-quant-agent/daily_run.sh
 # 应该显示: -rwxr-xr-x (有x执行权限)
 
 # 如果没有，运行：
-chmod +x /Users/rowan/clawd/ai-quant-agent/daily_run.sh
+chmod +x /Users/rowan/clawd/projects/ai-quant-agent/daily_run.sh
 ```
 
 ---
@@ -311,5 +311,5 @@ crontab -e
 
 ```bash
 crontab -e
-# 添加: 30 15 * * 1-5 cd /Users/rowan/clawd/ai-quant-agent && ./daily_run.sh >> logs/auto_trading.log 2>&1
+# 添加: 30 15 * * 1-5 cd /Users/rowan/clawd/projects/ai-quant-agent && ./daily_run.sh >> logs/auto_trading.log 2>&1
 ```

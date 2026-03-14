@@ -1,28 +1,28 @@
 {
-  "test_time": "2026-03-04T19:38:30.907305",
-  "portfolio_sharpe_full": 0.7140523018574166,
-  "portfolio_sharpe_wf": 0.8158194951087192,
-  "avg_confidence": 0.48,
+  "test_time": "2026-03-13T11:34:09.464155",
+  "portfolio_sharpe_full": 0.711891805475805,
+  "portfolio_sharpe_wf": 0.8199359899962851,
+  "avg_confidence": 0.5475000000000001,
   "stocks": {
     "宁德时代": {
-      "full_sharpe": 0.7668702999854552,
+      "full_sharpe": 0.7645495802956398,
       "full_return": 0.2150072,
-      "monte_carlo_confidence": 0.53
+      "monte_carlo_confidence": 0.5900000000000001
     },
     "立讯精密": {
-      "full_sharpe": 0.7795567505573694,
+      "full_sharpe": 0.7771974561352005,
       "full_return": 0.23158489999999962,
-      "monte_carlo_confidence": 0.5
+      "monte_carlo_confidence": 0.53
     },
     "中国平安": {
-      "full_sharpe": 0.6142527738502519,
+      "full_sharpe": 0.6123954555137587,
       "full_return": 0.1417492999999995,
-      "monte_carlo_confidence": 0.48
+      "monte_carlo_confidence": 0.49
     },
     "恒瑞医药": {
-      "full_sharpe": 0.42955725619213225,
+      "full_sharpe": 0.4282593917514304,
       "full_return": 0.10287649999999994,
-      "monte_carlo_confidence": 0.41000000000000003
+      "monte_carlo_confidence": 0.5800000000000001
     }
   }
 }

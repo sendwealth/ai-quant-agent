@@ -144,13 +144,13 @@ pytest tests/ --cov=core --cov=trading
 
 ```bash
 # 已配置cron
-50 8 * * 1-5 cd ~/clawd/ai-quant-agent && python3 run.py >> logs/daily.log 2>&1
+50 8 * * 1-5 cd ~/clawd/projects/ai-quant-agent && python3 run.py >> logs/daily.log 2>&1
 ```
 
 ### 每周分析 (周日10:00)
 
 ```bash
-0 10 * * 0 cd ~/clawd/ai-quant-agent && python3 examples/generate_battle_report.py
+0 10 * * 0 cd ~/clawd/projects/ai-quant-agent && python3 examples/generate_battle_report.py
 ```
 
 ---

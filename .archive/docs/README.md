@@ -97,7 +97,7 @@ python3 examples/auto_trading_bot.py
 crontab -e
 
 # 添加（每天15:30自动运行）
-30 15 * * 1-5 cd /Users/rowan/clawd/ai-quant-agent && python3 examples/auto_trading_bot.py >> logs/auto_trading.log 2>&1
+30 15 * * 1-5 cd /Users/rowan/clawd/projects/ai-quant-agent && python3 examples/auto_trading_bot.py >> logs/auto_trading.log 2>&1
 ```
 
 ### 3. 查看结果
@@ -272,7 +272,7 @@ MIT License
 
 ## 📞 联系方式
 
-- 项目位置: `/Users/rowan/clawd/ai-quant-agent`
+- 项目位置: `/Users/rowan/clawd/projects/ai-quant-agent`
 - 创建时间: 2026-03-04
 - 最后更新: 2026-03-04
 
