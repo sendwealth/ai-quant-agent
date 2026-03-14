@@ -98,8 +98,18 @@ def main():
         print(f"[{i}/{len(stocks)}] ", end='')
         
         if code in completed:
+            # 检查旧数据是否有return字段
+            old_data = completed[code]
+            if 'return' not in old_data:
+                print(f"🔄 {name} 数据格式旧，重新获取...")
+                result = get_stock_data(code, name)
+                if result:
+                    results.append(result)
+                    completed[code] = result
+                    success += 1
+                continue
             print(f"⏭️ {name} 已存在")
-            results.append(completed[code])
+            results.append(old_data)
             success += 1
             continue
         
@@ -120,6 +130,10 @@ def main():
     print("="*70)
     
     if results:
+        # 安全排序：确保所有结果都有return字段
+        for r in results:
+            if 'return' not in r:
+                r['return'] = 0
         results.sort(key=lambda x: x['return'], reverse=True)
         print("\n【按收益排序】")
         for r in results:
@@ -132,6 +146,29 @@ def main():
                 'success': success,
                 'stocks': results
             }, f, ensure_ascii=False, indent=2)
+        
+        # 数据验证
+        print("\n🔍 验证数据新鲜度...")
+        try:
+            import pandas as pd
+            from datetime import datetime
+            
+            # 检查第一只股票
+            test_file = f"data/real_{stocks[0][0]}.csv"
+            df = pd.read_csv(test_file)
+            if 'datetime' in df.columns:
+                df['datetime'] = pd.to_datetime(df['datetime'])
+                latest = df['datetime'].max()
+                age = (datetime.now() - latest.to_pydatetime()).days
+                
+                if age > 7:
+                    print(f"❌ 警告: 数据已过期{age}天!")
+                elif age > 3:
+                    print(f"⚠️  注意: 数据{age}天前更新")
+                else:
+                    print(f"✅ 数据新鲜（{age}天前）")
+        except Exception as e:
+            print(f"⚠️  验证失败: {e}")
 
 if __name__ == '__main__':
     Path('data').mkdir(exist_ok=True)

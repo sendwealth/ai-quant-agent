@@ -40,7 +40,7 @@
 crontab -e
 
 # 2. 添加以下行（每天15:30自动运行）
-30 15 * * 1-5 cd /Users/rowan/clawd/ai-quant-agent && ./daily_run.sh >> logs/auto_trading.log 2>&1
+30 15 * * 1-5 cd /Users/rowan/clawd/projects/ai-quant-agent && ./daily_run.sh >> logs/auto_trading.log 2>&1
 
 # 3. 保存退出
 ```
@@ -49,7 +49,7 @@ crontab -e
 
 每天收盘后运行：
 ```bash
-cd /Users/rowan/clawd/ai-quant-agent
+cd /Users/rowan/clawd/projects/ai-quant-agent
 python3 examples/auto_trading_bot.py
 ```
 

@@ -7,7 +7,7 @@
 ## 第1步：运行自动交易机器人 (5秒)
 
 ```bash
-cd /Users/rowan/clawd/ai-quant-agent
+cd /Users/rowan/clawd/projects/ai-quant-agent
 python3 examples/auto_trading_bot.py
 ```
 
@@ -26,7 +26,7 @@ python3 examples/auto_trading_bot.py
 crontab -e
 
 # 添加这行（每天15:30自动运行）
-30 15 * * 1-5 cd /Users/rowan/clawd/ai-quant-agent && python3 examples/auto_trading_bot.py >> logs/auto_trading.log 2>&1
+30 15 * * 1-5 cd /Users/rowan/clawd/projects/ai-quant-agent && python3 examples/auto_trading_bot.py >> logs/auto_trading.log 2>&1
 
 # 保存退出
 ```

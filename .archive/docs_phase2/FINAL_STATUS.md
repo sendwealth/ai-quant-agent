@@ -12,7 +12,7 @@
 
 ```
 项目名称: AI量化交易策略系统
-项目位置: /Users/rowan/clawd/ai-quant-agent
+项目位置: /Users/rowan/clawd/projects/ai-quant-agent
 开发时间: 2026-03-04 (11.5小时)
 当前版本: V4.1 Enhanced (增强版)
 系统状态: ✅ 完全就绪，自动运行中

@@ -53,7 +53,7 @@
 
 ```markdown
 ## 6️⃣ 量化策略监控
-- 文件: `~/clawd/ai-quant-agent/data/auto_portfolio.json`
+- 文件: `~/clawd/projects/ai-quant-agent/data/auto_portfolio.json`
 - 动作:
   - 检查持仓盈亏
   - 检查止损/止盈触发
@@ -78,7 +78,7 @@
 **Cron配置**:
 ```bash
 # 每个交易日 8:50 运行 (盘前分析)
-50 8 * * 1-5 cd ~/clawd/ai-quant-agent && python examples/daily_monitor.py >> logs/pre_market_$(date +\%Y\%m\%d).log 2>&1
+50 8 * * 1-5 cd ~/clawd/projects/ai-quant-agent && python examples/daily_monitor.py >> logs/pre_market_$(date +\%Y\%m\%d).log 2>&1
 ```
 
 ---
@@ -98,7 +98,7 @@
 **Cron配置**:
 ```bash
 # 每周日 10:00 运行
-0 10 * * 0 cd ~/clawd/ai-quant-agent && python examples/weekly_analysis.py >> logs/weekly_$(date +\%Y\%m\%d).log 2>&1
+0 10 * * 0 cd ~/clawd/projects/ai-quant-agent && python examples/weekly_analysis.py >> logs/weekly_$(date +\%Y\%m\%d).log 2>&1
 ```
 
 ---

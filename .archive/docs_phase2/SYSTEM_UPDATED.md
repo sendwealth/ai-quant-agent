@@ -12,10 +12,10 @@
 
 ```bash
 # 每日自动运行（使用增强版）
-30 15 * * 1-5 cd /Users/rowan/clawd/ai-quant-agent && python3 examples/enhanced_auto_trading_bot.py >> logs/auto_trading.log 2>&1
+30 15 * * 1-5 cd /Users/rowan/clawd/projects/ai-quant-agent && python3 examples/enhanced_auto_trading_bot.py >> logs/auto_trading.log 2>&1
 
 # 每周数据更新（保持不变）
-0 18 * * 0 cd /Users/rowan/clawd/ai-quant-agent && python3 examples/fetch_tushare_auto.py >> logs/data_update.log 2>&1
+0 18 * * 0 cd /Users/rowan/clawd/projects/ai-quant-agent && python3 examples/fetch_tushare_auto.py >> logs/data_update.log 2>&1
 ```
 
 **更新**: 从原版 `auto_trading_bot.py` → 增强版 `enhanced_auto_trading_bot.py`

@@ -101,7 +101,7 @@ python3 run.py  # 性能提升10-100倍
 ### 一键配置
 
 ```bash
-cd ~/clawd/ai-quant-agent
+cd ~/clawd/projects/ai-quant-agent
 ./setup_cron_optimized.sh
 ```
 
@@ -142,7 +142,7 @@ crontab -l
 ### 1️⃣ 盘前分析 (8:50)
 
 ```bash
-50 8 * * 1-5 cd ~/clawd/ai-quant-agent && \
+50 8 * * 1-5 cd ~/clawd/projects/ai-quant-agent && \
   python3 run.py >> logs/daily_$(date +\%Y\%m\%d).log 2>&1
 ```
 
@@ -159,7 +159,7 @@ crontab -l
 ### 2️⃣ 缓存清理 (10:00, 12:00, 14:00)
 
 ```bash
-0 10,12,14 * * 1-5 cd ~/clawd/ai-quant-agent && \
+0 10,12,14 * * 1-5 cd ~/clawd/projects/ai-quant-agent && \
   python3 -c "from core.cache import get_cache; get_cache().cleanup_expired()" \
   >> logs/cache_cleanup.log 2>&1
 ```
@@ -174,7 +174,7 @@ crontab -l
 ### 3️⃣ 健康检查 (9:00)
 
 ```bash
-0 9 * * * cd ~/clawd/ai-quant-agent && \
+0 9 * * * cd ~/clawd/projects/ai-quant-agent && \
   python3 utils/health_check.py >> logs/health_check_$(date +\%Y\%m\%d).log 2>&1
 ```
 
@@ -193,7 +193,7 @@ crontab -l
 ### 4️⃣ 数据更新 (18:00)
 
 ```bash
-0 18 * * 0 cd ~/clawd/ai-quant-agent && \
+0 18 * * 0 cd ~/clawd/projects/ai-quant-agent && \
   python3 examples/fetch_tushare_auto.py >> logs/data_update.log 2>&1
 ```
 
@@ -207,7 +207,7 @@ crontab -l
 ### 5️⃣ 每周报告 (10:00)
 
 ```bash
-0 10 * * 0 cd ~/clawd/ai-quant-agent && \
+0 10 * * 0 cd ~/clawd/projects/ai-quant-agent && \
   python3 examples/generate_battle_report.py >> logs/weekly_$(date +\%Y\%m\%d).log 2>&1
 ```
 
@@ -222,7 +222,7 @@ crontab -l
 ### 6️⃣ 性能报告 (9:00)
 
 ```bash
-0 9 * * 1 cd ~/clawd/ai-quant-agent && \
+0 9 * * 1 cd ~/clawd/projects/ai-quant-agent && \
   python3 -c "from utils.performance import get_monitor; m=get_monitor(); m.save(); print(m.get_summary())" \
   >> logs/performance_weekly.log 2>&1
 ```
@@ -238,7 +238,7 @@ crontab -l
 ### 7️⃣ 缓存清空 (0:00)
 
 ```bash
-0 0 * * * cd ~/clawd/ai-quant-agent && \
+0 0 * * * cd ~/clawd/projects/ai-quant-agent && \
   python3 -c "from core.cache import get_cache; c=get_cache(); c.clear(); print('Cache cleared')" \
   >> logs/cache_clear.log 2>&1
 ```
@@ -253,7 +253,7 @@ crontab -l
 ### 8️⃣ 日志轮转 (0:30)
 
 ```bash
-30 0 1 * * cd ~/clawd/ai-quant-agent/logs && \
+30 0 1 * * cd ~/clawd/projects/ai-quant-agent/logs && \
   find . -name "*.log" -mtime +30 -exec gzip {} \; 2>/dev/null
 ```
 
@@ -323,7 +323,7 @@ chmod +x utils/health_check.py
 
 使用绝对路径或`cd`到项目目录:
 ```bash
-cd ~/clawd/ai-quant-agent && python3 run.py
+cd ~/clawd/projects/ai-quant-agent && python3 run.py
 ```
 
 ---

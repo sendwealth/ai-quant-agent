@@ -1,38 +1,73 @@
 {
-  "timestamp": "2026-03-10T21:35:00",
-  "status": "initialized",
+  "timestamp": "2026-03-13T11:29:19",
+  "status": "updated",
   "market": {
-    "trend": "UNKNOWN",
-    "sentiment": "NEUTRAL",
+    "trend": "NEUTRAL",
+    "sentiment": "CAUTIOUS",
     "indices": []
   },
-  "positions": [],
+  "positions": [
+    {
+      "code": "300750",
+      "name": "宁德时代",
+      "signal": "BUY",
+      "price": 395.5,
+      "change_pct": 0
+    },
+    {
+      "code": "002475",
+      "name": "立讯精密",
+      "signal": "HOLD",
+      "price": 49.7,
+      "change_pct": 0
+    },
+    {
+      "code": "601318",
+      "name": "中国平安",
+      "signal": "SELL",
+      "price": 61.6,
+      "change_pct": 0
+    },
+    {
+      "code": "600276",
+      "name": "恒瑞医药",
+      "signal": "SELL",
+      "price": 55.3,
+      "change_pct": 0
+    }
+  ],
   "signals": {
-    "buy": [],
-    "sell": [],
-    "hold": []
+    "buy": ["300750"],
+    "sell": ["601318", "600276"],
+    "hold": ["002475"]
   },
   "alerts": [],
   "summary": {
-    "total_stocks": 5,
-    "buy_count": 0,
-    "sell_count": 0,
+    "total_stocks": 4,
+    "buy_count": 1,
+    "sell_count": 2,
     "alert_count": 0,
-    "market_trend": "UNKNOWN",
-    "market_sentiment": "NEUTRAL",
-    "last_check": "2026-03-10T21:35:00",
-    "next_check": "心跳触发时"
+    "market_trend": "NEUTRAL",
+    "market_sentiment": "CAUTIOUS",
+    "last_check": "2026-03-13T11:29:19",
+    "next_check": "心跳触发时",
+    "total_value": 52547.00,
+    "total_return": -0.4745
   },
   "watch_list": [
-    {"code": "600900", "name": "长江电力", "role": "core"},
-    {"code": "002594", "name": "比亚迪", "role": "core"},
     {"code": "300750", "name": "宁德时代", "role": "core"},
-    {"code": "600309", "name": "万华化学", "role": "satellite"},
-    {"code": "600036", "name": "招商银行", "role": "satellite"}
+    {"code": "002475", "name": "立讯精密", "role": "core"},
+    {"code": "601318", "name": "中国平安", "role": "core"},
+    {"code": "600276", "name": "恒瑞医药", "role": "core"}
   ],
   "risk_params": {
-    "stop_loss": -0.05,
+    "stop_loss": -0.06,
     "take_profit_1": 0.10,
     "take_profit_2": 0.20
+  },
+  "data_health": {
+    "status": "ok",
+    "message": "数据新鲜（1天前）",
+    "latest_date": "2026-03-12"
   }
 }

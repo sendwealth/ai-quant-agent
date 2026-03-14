@@ -92,6 +92,71 @@ class SystemHealthCheck:
                 'message': f'缺少文件: {", ".join(missing)}'
             }
     
+    def check_data_freshness(self):
+        """检查数据新鲜度"""
+        import pandas as pd
+        from datetime import datetime, timedelta
+        
+        data_dir = Path(__file__).parent.parent / 'data'
+        stock_files = sorted(data_dir.glob('real_*.csv'))  # 添加排序
+        
+        if not stock_files:
+            self.results['checks']['data_freshness'] = {
+                'status': 'error',
+                'message': '未找到股票数据文件'
+            }
+            return
+        
+        # 检查第一个文件的最新日期
+        try:
+            df = pd.read_csv(stock_files[0])
+            if 'datetime' in df.columns or 'trade_date' in df.columns:
+                date_col = 'datetime' if 'datetime' in df.columns else 'trade_date'
+                
+                # 智能解析日期（支持整数和字符串格式）
+                sample = df[date_col].iloc[0]
+                sample_dtype = str(df[date_col].dtype)
+                
+                if 'int' in sample_dtype or (isinstance(sample, str) and sample.isdigit()):
+                    df[date_col] = pd.to_datetime(df[date_col].astype(str), format='%Y%m%d')
+                else:
+                    df[date_col] = pd.to_datetime(df[date_col])
+                
+                latest_date = df[date_col].max()
+                # 安全转换（直接解析日期字符串，避免nanosecond问题）
+                latest_str = str(latest_date.date()) if hasattr(latest_date, 'date') else str(latest_date)
+                latest_pydatetime = datetime.strptime(latest_str.split()[0], '%Y-%m-%d')
+                age_days = (datetime.now() - latest_pydatetime).days
+                
+                if age_days > 7:
+                    self.results['checks']['data_freshness'] = {
+                        'status': 'error',
+                        'message': f'数据过期{age_days}天（>7天）',
+                        'latest_date': str(latest_date.date())
+                    }
+                elif age_days > 3:
+                    self.results['checks']['data_freshness'] = {
+                        'status': 'warning',
+                        'message': f'数据{age_days}天前更新',
+                        'latest_date': str(latest_date.date())
+                    }
+                else:
+                    self.results['checks']['data_freshness'] = {
+                        'status': 'ok',
+                        'message': f'数据新鲜（{age_days}天前）',
+                        'latest_date': str(latest_date.date())
+                    }
+            else:
+                self.results['checks']['data_freshness'] = {
+                    'status': 'warning',
+                    'message': '无法解析日期列'
+                }
+        except Exception as e:
+            self.results['checks']['data_freshness'] = {
+                'status': 'error',
+                'message': f'检查失败: {str(e)[:50]}'
+            }
+    
     def check_config(self):
         """检查配置"""
         config_file = Path(__file__).parent.parent / 'config' / 'strategy_v4.yaml'
@@ -175,6 +240,7 @@ class SystemHealthCheck:
         self.check_python_version()
         self.check_dependencies()
         self.check_data_files()
+        self.check_data_freshness()  # 新增
         self.check_config()
         self.check_cron_jobs()
         self.check_tests()

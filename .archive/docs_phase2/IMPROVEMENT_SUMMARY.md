@@ -90,7 +90,7 @@
 
 ```bash
 # 1. 运行全面改进
-cd /Users/rowan/clawd/ai-quant-agent
+cd /Users/rowan/clawd/projects/ai-quant-agent
 python3 examples/run_improvements.py
 
 # 2. 查看改进报告
