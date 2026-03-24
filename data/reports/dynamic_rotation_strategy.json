@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-03-24T22:38:12.581133",
+  "market_state": "BULL",
+  "allocation": {
+    "300750": 0.8,
+    "002475": 0.2
+  },
+  "expected_return": 0.5390400000000001,
+  "stock_states": {
+    "300750": "BULL",
+    "002475": "RANGE",
+    "601318": "BEAR"
+  }
+}

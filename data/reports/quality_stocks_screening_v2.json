@@ -1,0 +1,93 @@
+{
+  "timestamp": "2026-03-24T21:08:51.881343",
+  "version": "2.0",
+  "method": "Pure historical performance (no mock data)",
+  "total_analyzed": 5,
+  "quality_stocks": [
+    {
+      "code": "300750",
+      "name": "股票300750",
+      "total_return": 0.6707985599738178,
+      "annual_return": 0.471269232484242,
+      "volatility": 0.42076525737251563,
+      "max_drawdown": -0.29561319463454755,
+      "sharpe": 1.0487301999213627,
+      "trend_up": true,
+      "score": 80,
+      "reasons": [
+        "年化47.1%（优秀）",
+        "波动较高",
+        "回撤适中",
+        "趋势向上"
+      ]
+    },
+    {
+      "code": "601318",
+      "name": "股票601318",
+      "total_return": 0.06376332230797499,
+      "annual_return": 0.04759606841210817,
+      "volatility": 0.2783720026315325,
+      "max_drawdown": -0.2210710441334772,
+      "sharpe": 0.06321062551466153,
+      "trend_up": true,
+      "score": 70,
+      "reasons": [
+        "年化4.8%（一般）",
+        "波动适中",
+        "回撤适中",
+        "趋势向上"
+      ]
+    },
+    {
+      "code": "000333",
+      "name": "股票000333",
+      "total_return": 0.05018873200055918,
+      "annual_return": 0.012100316535053501,
+      "volatility": 0.2816920348123023,
+      "max_drawdown": -0.570359281437125,
+      "sharpe": -0.06354344906086341,
+      "trend_up": true,
+      "score": 60,
+      "reasons": [
+        "年化1.2%（一般）",
+        "波动适中",
+        "回撤极大",
+        "趋势向上"
+      ]
+    },
+    {
+      "code": "601398",
+      "name": "股票601398",
+      "total_return": 0.6163793103448276,
+      "annual_return": 0.12517780604653872,
+      "volatility": 0.16748665967923046,
+      "max_drawdown": -0.2749999999999996,
+      "sharpe": 0.5682709669463988,
+      "trend_up": false,
+      "score": 60,
+      "reasons": [
+        "年化12.5%（一般）",
+        "波动低",
+        "回撤适中",
+        "趋势向下"
+      ]
+    },
+    {
+      "code": "002475",
+      "name": "股票002475",
+      "total_return": 0.09941107184923426,
+      "annual_return": 0.073896011078048,
+      "volatility": 0.4371413454976517,
+      "max_drawdown": -0.38394605177289487,
+      "sharpe": 0.10041605885637693,
+      "trend_up": true,
+      "score": 60,
+      "reasons": [
+        "年化7.4%（一般）",
+        "波动较高",
+        "回撤较大",
+        "趋势向上"
+      ]
+    }
+  ]
+}
