@@ -1,81 +1,31 @@
-"""
-日志模块
-配置和管理系统日志
-"""
+#!/usr/bin/env python3
+"""统一的日志配置"""
 
-import sys
+import logging
 from pathlib import Path
-from loguru import logger
-from .config import get_config
 
 
-def setup_logger(config_path: str = None):
-    """
-    设置日志系统
+def get_logger(name: str, log_file: str = None, level=logging.INFO):
+    """获取配置好的 logger"""
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
 
-    Args:
-        config_path: 配置文件路径
-    """
-    # 移除默认处理器
-    logger.remove()
+    if logger.handlers:
+        return logger
 
-    # 获取配置
-    config = get_config()
-    log_level = config.get('logging', 'level', default='INFO')
-    log_file = config.get('logging', 'file', default='logs/quant_agent.log')
-    rotation = config.get('logging', 'rotation', default='10 MB')
-    retention = config.get('logging', 'retention', default='30 days')
-
-    # 创建日志目录
-    log_path = Path(log_file)
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # 控制台输出（带颜色）
-    logger.add(
-        sys.stderr,
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-        level=log_level,
-        colorize=True,
-        enqueue=True
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
 
-    # 文件输出（详细）
-    logger.add(
-        log_file,
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
-        level="DEBUG",
-        rotation=rotation,
-        retention=retention,
-        compression="zip",
-        enqueue=True
-    )
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
 
-    # 错误日志单独文件
-    logger.add(
-        log_path.parent / "errors.log",
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
-        level="ERROR",
-        rotation=rotation,
-        retention=retention,
-        compression="zip",
-        enqueue=True
-    )
+    if log_file:
+        log_path = Path(log_file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
 
-    logger.info(f"日志系统已初始化，级别: {log_level}")
-
-
-def get_logger(name: str = None):
-    """
-    获取logger实例
-
-    Args:
-        name: logger名称
-
-    Returns:
-        logger实例
-    """
-    return logger.bind(name=name) if name else logger
-
-
-# 自动初始化
-setup_logger()
+    return logger

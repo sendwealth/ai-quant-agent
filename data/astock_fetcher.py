@@ -3,6 +3,9 @@ A股数据获取模块
 使用AkShare和Tushare获取A股数据
 """
 
+from utils.logger import get_logger
+logger = get_logger(__name__)
+
 import pandas as pd
 import numpy as np
 from typing import List, Optional, Dict
@@ -13,14 +16,12 @@ try:
     AKSHARE_AVAILABLE = True
 except ImportError:
     AKSHARE_AVAILABLE = False
-    print("⚠️  AkShare未安装，使用模拟数据")
 
 try:
     import tushare as ts
     TUSHARE_AVAILABLE = True
 except ImportError:
     TUSHARE_AVAILABLE = False
-    print("⚠️  Tushare未安装，使用模拟数据")
 
 
 class AStockDataFetcher:
@@ -39,15 +40,15 @@ class AStockDataFetcher:
             try:
                 ts.set_token(tushare_token)
                 self.ts_pro = ts.pro_api()
-                print("✓ Tushare API 已连接")
+                logger.info("✓ Tushare API 已连接")
             except Exception as e:
-                print(f"⚠️  Tushare连接失败: {e}")
+                logger.info("⚠️  Tushare连接失败: {e}")
                 self.ts_pro = None
         else:
             self.ts_pro = None
 
         if AKSHARE_AVAILABLE:
-            print("✓ AkShare 已就绪")
+            logger.info("✓ AkShare 已就绪")
 
     def fetch_stock_daily(self,
                           symbol: str,
@@ -72,7 +73,7 @@ class AStockDataFetcher:
         if start_date is None:
             start_date = (datetime.now() - timedelta(days=730)).strftime('%Y%m%d')
 
-        print(f"获取A股数据: {symbol} ({start_date} -> {end_date})")
+        logger.info("获取A股数据: {symbol} ({start_date} -> {end_date})")
 
         try:
             if source == 'akshare' and AKSHARE_AVAILABLE:
@@ -83,8 +84,7 @@ class AStockDataFetcher:
                 return self._generate_mock_data(symbol, start_date, end_date)
 
         except Exception as e:
-            print(f"⚠️  数据获取失败: {e}")
-            print("使用模拟数据...")
+            logger.info("⚠️  数据获取失败: {e}")
             return self._generate_mock_data(symbol, start_date, end_date)
 
     def _fetch_akshare(self,
@@ -123,11 +123,11 @@ class AStockDataFetcher:
             for col in ['open', 'high', 'low', 'close', 'volume']:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
 
-            print(f"✓ 使用AkShare获取成功: {len(df)}条记录")
+            logger.info("✓ 使用AkShare获取成功: {len(df)}条记录")
             return df
 
         except Exception as e:
-            print(f"⚠️  AkShare获取失败: {e}")
+            logger.info("⚠️  AkShare获取失败: {e}")
             raise
 
     def _fetch_tushare(self,
@@ -165,11 +165,11 @@ class AStockDataFetcher:
             for col in ['open', 'high', 'low', 'close', 'volume']:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
 
-            print(f"✓ 使用Tushare获取成功: {len(df)}条记录")
+            logger.info("✓ 使用Tushare获取成功: {len(df)}条记录")
             return df
 
         except Exception as e:
-            print(f"⚠️  Tushare获取失败: {e}")
+            logger.info("⚠️  Tushare获取失败: {e}")
             raise
 
     def _generate_mock_data(self,
@@ -198,7 +198,7 @@ class AStockDataFetcher:
             'volume': np.random.randint(100000, 10000000, len(dates))
         })
 
-        print(f"✓ 生成模拟数据: {len(df)}条记录")
+        logger.info("✓ 生成模拟数据: {len(df)}条记录")
         return df
 
     def get_stock_list(self, market: str = '沪深') -> pd.DataFrame:
@@ -214,10 +214,10 @@ class AStockDataFetcher:
         if AKSHARE_AVAILABLE:
             try:
                 df = ak.stock_zh_a_spot_em()
-                print(f"✓ 获取股票列表: {len(df)}只")
+                logger.info("✓ 获取股票列表: {len(df)}只")
                 return df
             except Exception as e:
-                print(f"⚠️  获取股票列表失败: {e}")
+                logger.info("⚠️  获取股票列表失败: {e}")
 
         return pd.DataFrame()
 
@@ -239,10 +239,10 @@ class AStockDataFetcher:
                 df_sorted = df.sort_values('涨跌幅', ascending=False)
                 # 取前n个
                 hot_stocks = df_sorted['代码'].head(n).tolist()
-                print(f"✓ 获取热门股票: {len(hot_stocks)}只")
+                logger.info("✓ 获取热门股票: {len(hot_stocks)}只")
                 return hot_stocks
             except Exception as e:
-                print(f"⚠️  获取热门股票失败: {e}")
+                logger.info("⚠️  获取热门股票失败: {e}")
 
         # 默认热门股票
         return ['000001', '000002', '600000', '600036', '601318',
@@ -271,9 +271,9 @@ class AStockDataFetcher:
             try:
                 df = self.fetch_stock_daily(symbol, start_date, end_date, source)
                 data_dict[symbol] = df
-                print(f"✓ {symbol}: {len(df)}条记录")
+                logger.info("✓ {symbol}: {len(df)}条记录")
             except Exception as e:
-                print(f"✗ {symbol}: 获取失败 ({e})")
+                logger.info("✗ {symbol}: 获取失败 ({e})")
 
         return data_dict
 
@@ -307,7 +307,7 @@ def get_popular_astocks() -> List[str]:
 if __name__ == "__main__":
     # 测试A股数据获取
     print("="*70)
-    print("A股数据获取测试")
+    logger.info("A股数据获取测试")
     print("="*70)
 
     fetcher = AStockDataFetcher()
@@ -316,20 +316,20 @@ if __name__ == "__main__":
     end_date = datetime.now().strftime('%Y%m%d')
     start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
 
-    print(f"\n测试1: 获取贵州茅台 (600519)")
+    logger.info("\n测试1: 获取贵州茅台 (600519)")
     df = fetcher.fetch_stock_daily('600519', start_date, end_date, source='akshare')
 
     if df is not None and len(df) > 0:
-        print(f"\n数据预览:")
+        logger.info("\n数据预览:")
         print(df.head())
-        print(f"\n数据统计:")
+        logger.info("\n数据统计:")
         print(df.describe())
-        print(f"\n数据行数: {len(df)}")
+        logger.info("\n数据行数: {len(df)}")
 
     # 测试获取热门股票
-    print(f"\n\n测试2: 获取热门股票")
+    logger.info("\n\n测试2: 获取热门股票")
     hot_stocks = get_popular_astocks()[:5]
-    print(f"热门股票: {hot_stocks}")
+    logger.info("热门股票: {hot_stocks}")
 
     data_dict = fetcher.fetch_multiple_stocks(
         hot_stocks,
@@ -338,4 +338,4 @@ if __name__ == "__main__":
         source='akshare'
     )
 
-    print(f"\n成功获取: {len(data_dict)}只股票")
+    logger.info("\n成功获取: {len(data_dict)}只股票")

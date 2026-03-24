@@ -1,0 +1,22 @@
+{
+  "analyst": "Buffett Analyst",
+  "stock_code": "002475",
+  "timestamp": "2026-03-24T19:51:44.398798",
+  "signal": "SELL",
+  "confidence": 0.6,
+  "reasoning": "ROE < 10%，盈利能力不足",
+  "metrics": {
+    "current_price": 46.34,
+    "dcf_value": 44.023,
+    "safety_margin": "-5.0%",
+    "roe": "0.0%",
+    "gross_margin": "0.0%",
+    "net_margin": "0.0%",
+    "debt_ratio": "0.0%",
+    "current_ratio": 0
+  },
+  "scores": {
+    "competitive_mote": 6,
+    "management_quality": 6
+  }
+}

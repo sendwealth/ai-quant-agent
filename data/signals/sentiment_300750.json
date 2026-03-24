@@ -1,0 +1,15 @@
+{
+  "analyst": "sentiment",
+  "stock": "宁德时代",
+  "stock_code": "300750",
+  "signal": "BUY",
+  "confidence": 0.7,
+  "timestamp": "2026-03-23T21:35:01.181181",
+  "analysis": {
+    "news_sentiment": 0.65,
+    "social_sentiment": 0.72,
+    "insider_trading": "增持",
+    "analyst_rating": "买入"
+  },
+  "reasoning": "新闻情绪0.65，社交情绪0.72，内部人增持，分析师评级买入。"
+}

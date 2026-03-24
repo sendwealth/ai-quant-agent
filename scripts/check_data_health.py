@@ -11,7 +11,18 @@ import json
 def check_data_health():
     """检查数据健康状态"""
     data_dir = Path(__file__).parent.parent / 'data'
-    stock_files = sorted(data_dir.glob('real_*.csv'))  # 添加排序
+    
+    # 优先检查监控的股票（而不是第一个文件）
+    monitored_stocks = ['300750', '002475', '601318', '600276']
+    stock_files = []
+    for code in monitored_stocks:
+        f = data_dir / f'real_{code}.csv'
+        if f.exists():
+            stock_files.append(f)
+    
+    # 如果监控的股票没有数据，再检查其他文件
+    if not stock_files:
+        stock_files = sorted(data_dir.glob('real_*.csv'))
     
     if not stock_files:
         return {
@@ -23,8 +34,15 @@ def check_data_health():
     # 检查最新数据日期
     try:
         csv_file = stock_files[0]
-        df = pd.read_csv(csv_file)
-        date_col = 'datetime' if 'datetime' in df.columns else 'trade_date'
+        # 尝试读取，检查是否有headers
+        df_test = pd.read_csv(csv_file, nrows=1)
+        if 'datetime' in df_test.columns or 'trade_date' in df_test.columns:
+            df = pd.read_csv(csv_file)
+            date_col = 'datetime' if 'datetime' in df.columns else 'trade_date'
+        else:
+            # 无header的CSV，第一列是日期
+            df = pd.read_csv(csv_file, header=None, names=['date', 'open', 'high', 'low', 'close', 'volume'])
+            date_col = 'date'
         
         # 智能解析日期（支持整数和字符串格式）
         sample = df[date_col].iloc[0]

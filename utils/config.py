@@ -4,9 +4,10 @@
 """
 
 import os
-import yaml
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
+
+import yaml
 from loguru import logger
 
 
@@ -38,12 +39,12 @@ class Config:
                 logger.warning(f"配置文件不存在，使用示例配置: {self.config_path}")
                 logger.warning(f"请复制示例配置并修改: cp {example_path} {self.config_path}")
                 self.config_path = example_path
-                with open(self.config_path, 'r', encoding='utf-8') as f:
+                with open(self.config_path, "r", encoding="utf-8") as f:
                     self.config = yaml.safe_load(f)
             else:
                 raise FileNotFoundError(f"配置文件不存在: {self.config_path}")
         else:
-            with open(self.config_path, 'r', encoding='utf-8') as f:
+            with open(self.config_path, "r", encoding="utf-8") as f:
                 self.config = yaml.safe_load(f)
 
         # 加载环境变量覆盖
@@ -52,18 +53,18 @@ class Config:
     def _load_env_overrides(self):
         """从环境变量加载配置覆盖"""
         # LLM API密钥
-        if os.getenv('OPENAI_API_KEY'):
-            self.config['llm']['openai']['api_key'] = os.getenv('OPENAI_API_KEY')
-        if os.getenv('ZHIPUAI_API_KEY'):
-            self.config['llm']['zhipuai']['api_key'] = os.getenv('ZHIPUAI_API_KEY')
+        if os.getenv("OPENAI_API_KEY"):
+            self.config["llm"]["openai"]["api_key"] = os.getenv("OPENAI_API_KEY")
+        if os.getenv("ZHIPUAI_API_KEY"):
+            self.config["llm"]["zhipuai"]["api_key"] = os.getenv("ZHIPUAI_API_KEY")
 
         # Tushare token
-        if os.getenv('TUSHARE_TOKEN'):
-            self.config['data']['tushare']['token'] = os.getenv('TUSHARE_TOKEN')
+        if os.getenv("TUSHARE_TOKEN"):
+            self.config["data"]["tushare"]["token"] = os.getenv("TUSHARE_TOKEN")
 
         # 数据库密码
-        if os.getenv('DB_PASSWORD'):
-            self.config['database']['postgresql']['password'] = os.getenv('DB_PASSWORD')
+        if os.getenv("DB_PASSWORD"):
+            self.config["database"]["postgresql"]["password"] = os.getenv("DB_PASSWORD")
 
     def get(self, *keys, default=None) -> Any:
         """
@@ -103,7 +104,7 @@ class Config:
 
     def save(self):
         """保存配置到文件"""
-        with open(self.config_path, 'w', encoding='utf-8') as f:
+        with open(self.config_path, "w", encoding="utf-8") as f:
             yaml.dump(self.config, f, default_flow_style=False, allow_unicode=True)
         logger.info(f"配置已保存到: {self.config_path}")
 

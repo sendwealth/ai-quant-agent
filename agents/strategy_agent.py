@@ -5,11 +5,12 @@
 
 import json
 import re
-from typing import Dict, List, Optional, Any
-from langchain.prompts import PromptTemplate
+from typing import Any, Dict, List, Optional
+
 from langchain.chains import LLMChain
-from langchain_openai import ChatOpenAI
+from langchain.prompts import PromptTemplate
 from langchain_community.chat_models import ChatZhipuAI
+from langchain_openai import ChatOpenAI
 from loguru import logger
 
 from utils.config import get_config
@@ -26,32 +27,24 @@ class StrategyAgent:
 
     def _init_llm(self):
         """初始化大语言模型"""
-        provider = self.config.get('llm', 'provider', default='openai')
+        provider = self.config.get("llm", "provider", default="openai")
 
-        if provider == 'openai':
-            api_key = self.config.get('llm', 'openai', 'api_key')
-            model = self.config.get('llm', 'openai', 'model', default='gpt-4-turbo-preview')
-            self.llm = ChatOpenAI(
-                api_key=api_key,
-                model=model,
-                temperature=0.7
-            )
+        if provider == "openai":
+            api_key = self.config.get("llm", "openai", "api_key")
+            model = self.config.get("llm", "openai", "model", default="gpt-4-turbo-preview")
+            self.llm = ChatOpenAI(api_key=api_key, model=model, temperature=0.7)
             logger.info(f"使用OpenAI LLM: {model}")
 
-        elif provider == 'zhipuai':
-            api_key = self.config.get('llm', 'zhipuai', 'api_key')
-            model = self.config.get('llm', 'zhipuai', 'model', default='glm-4-turbo')
-            self.llm = ChatZhipuAI(
-                api_key=api_key,
-                model=model,
-                temperature=0.7
-            )
+        elif provider == "zhipuai":
+            api_key = self.config.get("llm", "zhipuai", "api_key")
+            model = self.config.get("llm", "zhipuai", "model", default="glm-4-turbo")
+            self.llm = ChatZhipuAI(api_key=api_key, model=model, temperature=0.7)
             logger.info(f"使用智谱AI LLM: {model}")
 
         else:
             raise ValueError(f"不支持的LLM提供商: {provider}")
 
-    def generate_strategy(self, description: str, market_type: str = 'stock') -> Dict[str, Any]:
+    def generate_strategy(self, description: str, market_type: str = "stock") -> Dict[str, Any]:
         """
         从自然语言描述生成交易策略
 
@@ -91,8 +84,7 @@ class StrategyAgent:
 """
 
         prompt = PromptTemplate(
-            template=prompt_template,
-            input_variables=["description", "market_type"]
+            template=prompt_template, input_variables=["description", "market_type"]
         )
 
         chain = LLMChain(llm=self.llm, prompt=prompt)
@@ -115,7 +107,7 @@ class StrategyAgent:
     def _parse_llm_response(self, response: str) -> Dict[str, Any]:
         """解析LLM响应为JSON"""
         # 尝试提取JSON
-        json_match = re.search(r'\{[\s\S]*\}', response)
+        json_match = re.search(r"\{[\s\S]*\}", response)
 
         if json_match:
             try:
@@ -128,7 +120,7 @@ class StrategyAgent:
                     "parameters": {},
                     "code": self._extract_code_from_response(response),
                     "entry_conditions": [],
-                    "exit_conditions": []
+                    "exit_conditions": [],
                 }
         else:
             return {
@@ -137,13 +129,13 @@ class StrategyAgent:
                 "parameters": {},
                 "code": self._extract_code_from_response(response),
                 "entry_conditions": [],
-                "exit_conditions": []
+                "exit_conditions": [],
             }
 
     def _extract_code_from_response(self, response: str) -> str:
         """从响应中提取Python代码"""
         # 查找代码块
-        code_block = re.search(r'```python\n([\s\S]*?)```', response)
+        code_block = re.search(r"```python\n([\s\S]*?)```", response)
 
         if code_block:
             return code_block.group(1)
@@ -151,9 +143,9 @@ class StrategyAgent:
             # 如果没有代码块，返回整个响应
             return response
 
-    def optimize_parameters(self, strategy_code: str,
-                           df: pd.DataFrame,
-                           target_metric: str = 'sharpe_ratio') -> Dict[str, Any]:
+    def optimize_parameters(
+        self, strategy_code: str, df: pd.DataFrame, target_metric: str = "sharpe_ratio"
+    ) -> Dict[str, Any]:
         """
         优化策略参数
 
@@ -169,11 +161,7 @@ class StrategyAgent:
 
         # 这里可以集成强化学习优化器
         # 暂时返回空结果
-        return {
-            "parameters": {},
-            "performance": {},
-            "message": "参数优化功能待开发"
-        }
+        return {"parameters": {}, "performance": {}, "message": "参数优化功能待开发"}
 
     def analyze_strategy(self, strategy_code: str, df: pd.DataFrame) -> Dict[str, Any]:
         """
@@ -194,11 +182,11 @@ class StrategyAgent:
             exec(strategy_code, namespace)
 
             # 生成信号
-            if 'generate_signals' in namespace:
-                signals = namespace['generate_signals'](df)
+            if "generate_signals" in namespace:
+                signals = namespace["generate_signals"](df)
 
                 # 计算基本指标
-                returns = df['close'].pct_change()
+                returns = df["close"].pct_change()
                 strategy_returns = signals.shift(1) * returns
 
                 total_return = (1 + strategy_returns).prod() - 1
@@ -219,19 +207,15 @@ class StrategyAgent:
                     "sharpe_ratio": sharpe_ratio,
                     "max_drawdown": max_drawdown,
                     "win_rate": (strategy_returns > 0).mean(),
-                    "message": "策略分析完成"
+                    "message": "策略分析完成",
                 }
 
             else:
-                return {
-                    "message": "策略代码中未找到generate_signals函数"
-                }
+                return {"message": "策略代码中未找到generate_signals函数"}
 
         except Exception as e:
             logger.error(f"策略分析失败: {e}")
-            return {
-                "message": f"策略分析失败: {str(e)}"
-            }
+            return {"message": f"策略分析失败: {str(e)}"}
 
 
 # 示例策略生成器
@@ -247,7 +231,7 @@ def generate_example_strategies() -> List[str]:
         "当价格突破布林带上轨时买入，当价格跌破布林带下轨时卖出",
         "当ADX大于25且+DI大于-DI时买入，当ADX大于25且-DI大于+DI时卖出",
         "随机指标%K低于20时买入，%K高于80时卖出",
-        "当威廉指标低于-80时买入，威廉指标高于-20时卖出"
+        "当威廉指标低于-80时买入，威廉指标高于-20时卖出",
     ]
 
     return examples
@@ -261,16 +245,16 @@ if __name__ == "__main__":
     examples = generate_example_strategies()
 
     for i, example in enumerate(examples[:2], 1):
-        print(f"\n{'='*60}")
-        print(f"示例 {i}: {example}")
-        print('='*60)
+        logger.info("\n{'='*60}")
+        logger.info("示例 {i}: {example}")
+        print("=" * 60)
 
-        strategy = agent.generate_strategy(example, market_type='stock')
+        strategy = agent.generate_strategy(example, market_type="stock")
 
         if strategy:
-            print(f"\n策略名称: {strategy['strategy_name']}")
-            print(f"描述: {strategy['description']}")
-            print(f"\n参数: {strategy['parameters']}")
-            print(f"\n代码:\n{strategy['code'][:500]}...")
-            print(f"\n开仓条件: {strategy['entry_conditions']}")
-            print(f"平仓条件: {strategy['exit_conditions']}")
+            logger.info("\n策略名称: {strategy['strategy_name']}")
+            logger.info("描述: {strategy['description']}")
+            logger.info("\n参数: {strategy['parameters']}")
+            logger.info("\n代码:\n{strategy['code'][:500]}...")
+            logger.info("\n开仓条件: {strategy['entry_conditions']}")
+            logger.info("平仓条件: {strategy['exit_conditions']}")

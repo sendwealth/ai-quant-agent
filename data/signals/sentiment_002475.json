@@ -1,0 +1,15 @@
+{
+  "analyst": "sentiment",
+  "stock": "立讯精密",
+  "stock_code": "002475",
+  "signal": "HOLD",
+  "confidence": 0.6,
+  "timestamp": "2026-03-23T21:20:34.433398",
+  "analysis": {
+    "news_sentiment": 0.58,
+    "social_sentiment": 0.65,
+    "insider_trading": "无",
+    "analyst_rating": "持有"
+  },
+  "reasoning": "新闻情绪0.58，社交情绪0.65，内部人无，分析师评级持有。"
+}

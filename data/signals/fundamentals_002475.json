@@ -1,0 +1,15 @@
+{
+  "analyst": "fundamentals",
+  "stock": "立讯精密",
+  "stock_code": "002475",
+  "signal": "BUY",
+  "confidence": 0.8,
+  "timestamp": "2026-03-23T21:20:34.406385",
+  "analysis": {
+    "pe_ratio": 28.0,
+    "pb_ratio": 4.0,
+    "de_ratio": 0.55,
+    "financial_health": 7
+  },
+  "reasoning": "P/E 28.0倍，P/B 4.0倍，负债率55%，财务健康度7/10。"
+}

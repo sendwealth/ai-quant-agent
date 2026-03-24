@@ -1,0 +1,16 @@
+{
+  "analyst": "growth",
+  "stock": "立讯精密",
+  "stock_code": "002475",
+  "signal": "BUY",
+  "confidence": 0.8,
+  "timestamp": "2026-03-23T21:20:34.320791",
+  "analysis": {
+    "revenue_growth": 0.28,
+    "profit_growth": 0.32,
+    "tam": "5000亿元",
+    "market_share": "15%",
+    "innovation_score": 8
+  },
+  "reasoning": "营收增长28%，利润增长32%，TAM 5000亿元，市场份额15%，创新能力8/10。"
+}

@@ -1,15 +1,9 @@
 {
-  "timestamp": "2026-03-14T09:59:33.434180",
+  "timestamp": "2026-03-24T22:27:59.148879",
   "status": "ok",
   "alerts": [],
   "summary": {
     "data_health": "ok",
-    "latest_date": "2026-03-12",
-    "portfolio": {
-      "total_value": 10000.0,
-      "return_pct": 0.0,
-      "position_count": 1
-    },
-    "risk_alerts": 0
+    "latest_date": "2026-03-23"
   }
 }

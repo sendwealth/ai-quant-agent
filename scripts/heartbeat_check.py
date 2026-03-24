@@ -24,7 +24,8 @@ def run_quick_check():
             ['python3', 'scripts/check_data_health.py'],
             capture_output=True,
             text=True,
-            cwd=Path(__file__).parent.parent
+            cwd=Path(__file__).parent.parent,
+            timeout=30  # 30秒超时
         )
 
         output = proc.stdout

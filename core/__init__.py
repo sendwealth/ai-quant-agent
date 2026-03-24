@@ -7,10 +7,21 @@ Core模块
 
 from .indicators import *
 
-__version__ = '1.0.0'
+__version__ = "1.0.0"
 __all__ = [
-    'sma', 'ema', 'atr', 'rsi', 'macd',
-    'bollinger_bands', 'stochastic', 'williams_r',
-    'adx', 'obv', 'momentum', 'rate_of_change', 'cci',
-    'detect_crossover', 'normalize',
+    "sma",
+    "ema",
+    "atr",
+    "rsi",
+    "macd",
+    "bollinger_bands",
+    "stochastic",
+    "williams_r",
+    "adx",
+    "obv",
+    "momentum",
+    "rate_of_change",
+    "cci",
+    "detect_crossover",
+    "normalize",
 ]

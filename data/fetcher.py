@@ -3,6 +3,9 @@
 从多个数据源获取历史和实时数据
 """
 
+from utils.logger import get_logger
+logger = get_logger(__name__)
+
 import yfinance as yf
 import pandas as pd
 from typing import List, Optional, Dict
@@ -244,31 +247,31 @@ if __name__ == "__main__":
     fetcher = DataFetcher()
 
     print("="*60)
-    print("测试数据获取")
+    logger.info("测试数据获取")
     print("="*60)
 
     # 获取苹果公司（AAPL）最近一年的数据
     end_date = datetime.now().strftime('%Y-%m-%d')
     start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
 
-    print(f"\n获取AAPL数据 ({start_date} -> {end_date})...")
+    logger.info("\n获取AAPL数据 ({start_date} -> {end_date})...")
     df = fetcher.fetch_stock_data('AAPL', start_date, end_date)
 
-    print(f"\n数据预览:")
+    logger.info("\n数据预览:")
     print(df.head())
-    print(f"\n数据统计:")
+    logger.info("\n数据统计:")
     print(df.describe())
 
-    print(f"\n数据列: {list(df.columns)}")
-    print(f"数据行数: {len(df)}")
+    logger.info("\n数据列: {list(df.columns)}")
+    logger.info("数据行数: {len(df)}")
 
     # 获取最新价格
-    print(f"\n获取最新价格...")
+    logger.info("\n获取最新价格...")
     latest_price = fetcher.get_latest_price('AAPL')
-    print(f"AAPL 最新价格: ${latest_price:.2f}")
+    logger.info("AAPL 最新价格: ${latest_price:.2f}")
 
     # 批量获取多个股票
-    print(f"\n批量获取数据...")
+    logger.info("\n批量获取数据...")
     symbols = ['AAPL', 'MSFT', 'GOOGL']
     data_dict = fetcher.fetch_multiple_symbols(
         symbols=symbols,
@@ -276,6 +279,6 @@ if __name__ == "__main__":
         end_date=end_date
     )
 
-    print(f"\n成功获取 {len(data_dict)} 只股票的数据")
+    logger.info("\n成功获取 {len(data_dict)} 只股票的数据")
     for symbol, data in data_dict.items():
-        print(f"  {symbol}: {len(data)}条记录")
+        logger.info("  {symbol}: {len(data)}条记录")

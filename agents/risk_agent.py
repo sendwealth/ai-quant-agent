@@ -3,9 +3,10 @@
 动态风险管理、止损止盈、仓位管理
 """
 
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
 from loguru import logger
 
 from utils.config import get_config
@@ -21,12 +22,14 @@ class RiskAgent:
         self.max_drawdown = 0.0
         self.peak_equity = 0.0
 
-    def calculate_position_size(self,
-                                  signal_direction: str,
-                                  signal_strength: str,
-                                  current_price: float,
-                                  account_value: float,
-                                  volatility: float = None) -> float:
+    def calculate_position_size(
+        self,
+        signal_direction: str,
+        signal_strength: str,
+        current_price: float,
+        account_value: float,
+        volatility: float = None,
+    ) -> float:
         """
         计算建议仓位大小
 
@@ -41,8 +44,8 @@ class RiskAgent:
             建议持仓数量
         """
         # 基础风险比例
-        base_risk_per_trade = self.config.get('strategy', 'default', 'risk_per_trade', default=0.02)
-        max_position_size = self.config.get('strategy', 'default', 'max_position_size', default=0.3)
+        base_risk_per_trade = self.config.get("strategy", "default", "risk_per_trade", default=0.02)
+        max_position_size = self.config.get("strategy", "default", "max_position_size", default=0.3)
 
         # 根据信号强度调整
         if signal_strength == "strong":
@@ -73,16 +76,16 @@ class RiskAgent:
         position_value = risk_amount * 2  # 2倍杠杆（可配置）
         position_size = position_value / current_price
 
-        logger.info(f"仓位计算: 信号={signal_direction}, 强度={signal_strength}, "
-                   f"波动率={volatility:.2f}%, 仓位={position_size:.2f}")
+        logger.info(
+            f"仓位计算: 信号={signal_direction}, 强度={signal_strength}, "
+            f"波动率={volatility:.2f}%, 仓位={position_size:.2f}"
+        )
 
         return position_size
 
-    def calculate_stop_loss(self,
-                            entry_price: float,
-                            signal_direction: str,
-                            volatility: float = None,
-                            atr: float = None) -> float:
+    def calculate_stop_loss(
+        self, entry_price: float, signal_direction: str, volatility: float = None, atr: float = None
+    ) -> float:
         """
         计算止损位
 
@@ -96,7 +99,7 @@ class RiskAgent:
             止损价格
         """
         # 默认止损比例
-        default_stop_loss = self.config.get('strategy', 'default', 'stop_loss', default=0.05)
+        default_stop_loss = self.config.get("strategy", "default", "stop_loss", default=0.05)
 
         # 使用ATR或波动率计算动态止损
         if atr is not None:
@@ -118,15 +121,16 @@ class RiskAgent:
         else:
             stop_loss = entry_price
 
-        logger.info(f"止损计算: 入场={entry_price:.2f}, 方向={signal_direction}, "
-                   f"止损={stop_loss:.2f} ({stop_loss_pct*100:.2f}%)")
+        logger.info(
+            f"止损计算: 入场={entry_price:.2f}, 方向={signal_direction}, "
+            f"止损={stop_loss:.2f} ({stop_loss_pct*100:.2f}%)"
+        )
 
         return stop_loss
 
-    def calculate_take_profit(self,
-                              entry_price: float,
-                              stop_loss: float,
-                              signal_strength: str) -> float:
+    def calculate_take_profit(
+        self, entry_price: float, stop_loss: float, signal_strength: str
+    ) -> float:
         """
         计算止盈位
 
@@ -155,14 +159,16 @@ class RiskAgent:
         else:  # 空头
             take_profit = entry_price - risk * risk_reward_ratio
 
-        logger.info(f"止盈计算: 入场={entry_price:.2f}, 止损={stop_loss:.2f}, "
-                   f"止盈={take_profit:.2f} (风险收益比={risk_reward_ratio})")
+        logger.info(
+            f"止盈计算: 入场={entry_price:.2f}, 止损={stop_loss:.2f}, "
+            f"止盈={take_profit:.2f} (风险收益比={risk_reward_ratio})"
+        )
 
         return take_profit
 
-    def check_risk_limits(self, account_value: float,
-                         daily_pnl: float,
-                         current_drawdown: float) -> Tuple[bool, str]:
+    def check_risk_limits(
+        self, account_value: float, daily_pnl: float, current_drawdown: float
+    ) -> Tuple[bool, str]:
         """
         检查风险限制
 
@@ -175,26 +181,30 @@ class RiskAgent:
             (是否允许交易, 原因)
         """
         # 日亏损限制
-        daily_loss_limit = self.config.get('risk', 'daily_loss_limit', default=0.05)
+        daily_loss_limit = self.config.get("risk", "daily_loss_limit", default=0.05)
         if daily_pnl < 0 and abs(daily_pnl / account_value) > daily_loss_limit:
             reason = f"当日亏损超过限制 ({abs(daily_pnl/account_value)*100:.2f}% > {daily_loss_limit*100:.2f}%)"
             logger.warning(reason)
             return False, reason
 
         # 最大回撤限制
-        max_drawdown_limit = self.config.get('risk', 'max_drawdown', default=0.2)
+        max_drawdown_limit = self.config.get("risk", "max_drawdown", default=0.2)
         if current_drawdown < -max_drawdown_limit:
-            reason = f"回撤超过限制 ({abs(current_drawdown)*100:.2f}% > {max_drawdown_limit*100:.2f}%)"
+            reason = (
+                f"回撤超过限制 ({abs(current_drawdown)*100:.2f}% > {max_drawdown_limit*100:.2f}%)"
+            )
             logger.warning(reason)
             return False, reason
 
         return True, "风险检查通过"
 
-    def dynamic_trailing_stop(self,
-                             entry_price: float,
-                             current_price: float,
-                             signal_direction: str,
-                             highest_profit_pct: float = 0) -> float:
+    def dynamic_trailing_stop(
+        self,
+        entry_price: float,
+        current_price: float,
+        signal_direction: str,
+        highest_profit_pct: float = 0,
+    ) -> float:
         """
         动态移动止损（追踪止损）
 
@@ -223,18 +233,19 @@ class RiskAgent:
             else:
                 trailing_stop = current_price * (1 + trail_pct * profit_pct)
 
-            logger.info(f"移动止损: 当前价格={current_price:.2f}, "
-                       f"盈利={profit_pct*100:.2f}%, 追踪止损={trailing_stop:.2f}")
+            logger.info(
+                f"移动止损: 当前价格={current_price:.2f}, "
+                f"盈利={profit_pct*100:.2f}%, 追踪止损={trailing_stop:.2f}"
+            )
 
             return trailing_stop
 
         # 未达到盈利阈值，返回入场价格作为止损
         return entry_price
 
-    def check_position_concentration(self,
-                                     positions: Dict[str, Dict],
-                                     symbol: str,
-                                     max_positions: int = None) -> Tuple[bool, str]:
+    def check_position_concentration(
+        self, positions: Dict[str, Dict], symbol: str, max_positions: int = None
+    ) -> Tuple[bool, str]:
         """
         检查持仓集中度
 
@@ -247,7 +258,7 @@ class RiskAgent:
             (是否允许交易, 原因)
         """
         if max_positions is None:
-            max_positions = self.config.get('risk', 'max_positions', default=10)
+            max_positions = self.config.get("risk", "max_positions", default=10)
 
         num_positions = len(positions)
 
@@ -264,11 +275,9 @@ class RiskAgent:
 
         return True, "持仓集中度检查通过"
 
-    def manage_risk_on_profit(self,
-                              current_price: float,
-                              entry_price: float,
-                              position_size: float,
-                              signal_direction: str) -> Tuple[float, float]:
+    def manage_risk_on_profit(
+        self, current_price: float, entry_price: float, position_size: float, signal_direction: str
+    ) -> Tuple[float, float]:
         """
         盈利时动态管理仓位
 
@@ -298,8 +307,10 @@ class RiskAgent:
             else:
                 new_stop_loss = entry_price
 
-            logger.info(f"盈利加仓: 盈利={profit_pct*100:.2f}%, "
-                       f"仓位={position_size:.2f} -> {new_position_size:.2f}")
+            logger.info(
+                f"盈利加仓: 盈利={profit_pct*100:.2f}%, "
+                f"仓位={position_size:.2f} -> {new_position_size:.2f}"
+            )
 
             return new_position_size, new_stop_loss
 
@@ -320,9 +331,9 @@ class RiskAgent:
         var = np.percentile(returns, (1 - confidence) * 100)
         return var
 
-    def calculate_portfolio_risk(self,
-                                  positions: Dict[str, Dict],
-                                  correlation_matrix: pd.DataFrame = None) -> Dict[str, float]:
+    def calculate_portfolio_risk(
+        self, positions: Dict[str, Dict], correlation_matrix: pd.DataFrame = None
+    ) -> Dict[str, float]:
         """
         计算投资组合风险
 
@@ -333,23 +344,23 @@ class RiskAgent:
         Returns:
             风险指标字典
         """
-        total_value = sum([pos['size'] * pos['current_price'] for pos in positions.values()])
+        total_value = sum([pos["size"] * pos["current_price"] for pos in positions.values()])
 
         # 计算单个持仓的风险
         position_risks = {}
         for symbol, pos in positions.items():
-            if signal_direction := pos.get('direction'):
-                if signal_direction == 'long':
-                    pct_change = (pos['current_price'] - pos['entry_price']) / pos['entry_price']
+            if signal_direction := pos.get("direction"):
+                if signal_direction == "long":
+                    pct_change = (pos["current_price"] - pos["entry_price"]) / pos["entry_price"]
                 else:
-                    pct_change = (pos['entry_price'] - pos['current_price']) / pos['entry_price']
+                    pct_change = (pos["entry_price"] - pos["current_price"]) / pos["entry_price"]
 
-                position_value = pos['size'] * pos['current_price']
+                position_value = pos["size"] * pos["current_price"]
                 weight = position_value / total_value
                 position_risks[symbol] = {
-                    'weight': weight,
-                    'pnl_pct': pct_change,
-                    'contribution_to_risk': weight * abs(pct_change)
+                    "weight": weight,
+                    "pnl_pct": pct_change,
+                    "contribution_to_risk": weight * abs(pct_change),
                 }
 
         # 如果有相关性矩阵，计算组合风险
@@ -358,9 +369,9 @@ class RiskAgent:
             pass
 
         return {
-            'total_value': total_value,
-            'position_risks': position_risks,
-            'portfolio_risk': sum([r['contribution_to_risk'] for r in position_risks.values()])
+            "total_value": total_value,
+            "position_risks": position_risks,
+            "portfolio_risk": sum([r["contribution_to_risk"] for r in position_risks.values()]),
         }
 
 
@@ -374,30 +385,22 @@ if __name__ == "__main__":
         signal_strength="strong",
         current_price=100.0,
         account_value=100000,
-        volatility=1.5
+        volatility=1.5,
     )
-    print(f"建议仓位: {position_size:.2f}")
+    logger.info("建议仓位: {position_size:.2f}")
 
     # 测试止损计算
-    stop_loss = agent.calculate_stop_loss(
-        entry_price=100.0,
-        signal_direction="long",
-        atr=2.0
-    )
-    print(f"止损价格: {stop_loss:.2f}")
+    stop_loss = agent.calculate_stop_loss(entry_price=100.0, signal_direction="long", atr=2.0)
+    logger.info("止损价格: {stop_loss:.2f}")
 
     # 测试止盈计算
     take_profit = agent.calculate_take_profit(
-        entry_price=100.0,
-        stop_loss=stop_loss,
-        signal_strength="strong"
+        entry_price=100.0, stop_loss=stop_loss, signal_strength="strong"
     )
-    print(f"止盈价格: {take_profit:.2f}")
+    logger.info("止盈价格: {take_profit:.2f}")
 
     # 测试风险限制检查
     allowed, reason = agent.check_risk_limits(
-        account_value=100000,
-        daily_pnl=-3000,
-        current_drawdown=-0.08
+        account_value=100000, daily_pnl=-3000, current_drawdown=-0.08
     )
-    print(f"风险检查: {'通过' if allowed else '拒绝'} - {reason}")
+    logger.info("风险检查: {'通过' if allowed else '拒绝'} - {reason}")

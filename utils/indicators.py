@@ -3,9 +3,10 @@
 提供常用的技术分析指标
 """
 
+from typing import Tuple
+
 import numpy as np
 import pandas as pd
-from typing import Tuple
 
 
 def sma(data: pd.Series, period: int) -> pd.Series:
@@ -56,7 +57,9 @@ def rsi(data: pd.Series, period: int = 14) -> pd.Series:
     return rsi
 
 
-def macd(data: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Tuple[pd.Series, pd.Series, pd.Series]:
+def macd(
+    data: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9
+) -> Tuple[pd.Series, pd.Series, pd.Series]:
     """
     MACD指标 (Moving Average Convergence Divergence)
 
@@ -78,7 +81,9 @@ def macd(data: pd.Series, fast: int = 12, slow: int = 26, signal: int = 9) -> Tu
     return macd_line, signal_line, histogram
 
 
-def bollinger_bands(data: pd.Series, period: int = 20, std_dev: int = 2) -> Tuple[pd.Series, pd.Series, pd.Series]:
+def bollinger_bands(
+    data: pd.Series, period: int = 20, std_dev: int = 2
+) -> Tuple[pd.Series, pd.Series, pd.Series]:
     """
     布林带 (Bollinger Bands)
 
@@ -167,8 +172,9 @@ def adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> 
     return adx_val
 
 
-def stochastic(high: pd.Series, low: pd.Series, close: pd.Series,
-               k_period: int = 14, d_period: int = 3) -> Tuple[pd.Series, pd.Series]:
+def stochastic(
+    high: pd.Series, low: pd.Series, close: pd.Series, k_period: int = 14, d_period: int = 3
+) -> Tuple[pd.Series, pd.Series]:
     """
     随机指标 (Stochastic Oscillator)
 
