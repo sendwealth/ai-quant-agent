@@ -19,3 +19,19 @@ py-spy>=0.3.14
 memory_profiler>=0.61.0
 loguru>=0.7.0
 PyYAML>=6.0
+
+# 数据处理
+numpy>=1.24.0
+pandas>=2.0.0
+yfinance>=0.2.0
+
+# 网络请求
+requests>=2.31.0
+
+# 系统监控
+psutil>=5.9.0
+
+# AI/LLM (可选)
+langchain>=0.1.0
+langchain-community>=0.0.20
+langchain-openai>=0.0.5

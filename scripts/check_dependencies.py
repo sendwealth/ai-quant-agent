@@ -62,6 +62,13 @@ def main():
         'unicodedata', 'locale', 'calendar', 'argparse', 'optparse',
         'getopt', 'configparser', 'traceback', 'warnings', 'unittest',
         'doctest', 'pdb', 'profile', 'cProfile', 'timeit',
+        'email', 'smtplib', 'pickle', 'statistics',  # 新增标准库
+    }
+
+    # 项目内部模块（不需要在 requirements.txt 中）
+    LOCAL_MODULES = {
+        'config', 'core', 'utils', 'trading', 'agents', 'data',
+        'scripts', 'tests', 'cache', 'logs', 'reports', 'templates',
     }
 
     # 第三方库包名映射（import名 → pip包名）
@@ -78,6 +85,8 @@ def main():
     missing = []
     for imp in sorted(imports):
         if imp in STDLIB:
+            continue
+        if imp in LOCAL_MODULES:
             continue
 
         # 转换为 pip 包名
