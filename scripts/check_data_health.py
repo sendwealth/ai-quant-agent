@@ -36,9 +36,15 @@ def check_data_health():
         csv_file = stock_files[0]
         # 尝试读取，检查是否有headers
         df_test = pd.read_csv(csv_file, nrows=1)
-        if 'datetime' in df_test.columns or 'trade_date' in df_test.columns:
+        if 'datetime' in df_test.columns:
             df = pd.read_csv(csv_file)
-            date_col = 'datetime' if 'datetime' in df.columns else 'trade_date'
+            date_col = 'datetime'
+        elif 'trade_date' in df_test.columns:
+            df = pd.read_csv(csv_file)
+            date_col = 'trade_date'
+        elif 'date' in df_test.columns:
+            df = pd.read_csv(csv_file)
+            date_col = 'date'
         else:
             # 无header的CSV，第一列是日期
             df = pd.read_csv(csv_file, header=None, names=['date', 'open', 'high', 'low', 'close', 'volume'])

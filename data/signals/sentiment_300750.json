@@ -1,15 +1,33 @@
 {
-  "analyst": "sentiment",
-  "stock": "宁德时代",
+  "analyst": "Sentiment Analyst",
   "stock_code": "300750",
-  "signal": "BUY",
-  "confidence": 0.7,
-  "timestamp": "2026-03-23T21:35:01.181181",
-  "analysis": {
-    "news_sentiment": 0.65,
-    "social_sentiment": 0.72,
-    "insider_trading": "增持",
-    "analyst_rating": "买入"
+  "timestamp": "2026-04-05T19:19:49.940806",
+  "signal": "HOLD",
+  "confidence": 0.6,
+  "reasoning": "市场情绪中性(综合得分-0.18)",
+  "metrics": {
+    "current_price": 386.46,
+    "overall_sentiment": -0.225
   },
-  "reasoning": "新闻情绪0.65，社交情绪0.72，内部人增持，分析师评级买入。"
+  "analysis": {
+    "price_momentum": "小幅下跌",
+    "volume": "低关注",
+    "technical": "RSI 38 (偏弱), MACD 死叉",
+    "volatility": "高波动"
+  },
+  "scores": {
+    "momentum_sentiment": -0.2,
+    "volume_sentiment": -0.2,
+    "technical_sentiment": 0.0,
+    "volatility_sentiment": -0.5
+  },
+  "details": {
+    "returns": {
+      "5d": -6.426150121065377,
+      "10d": -3.863280181099038,
+      "20d": 8.100699300699299
+    },
+    "volume_ratio": 0.74,
+    "annual_volatility": "39.7%"
+  }
 }

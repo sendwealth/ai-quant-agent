@@ -1,44 +1,8 @@
 {
-  "timestamp": "2026-03-24T22:35:45.379783",
+  "timestamp": "2026-03-27T09:46:23.529590",
   "stocks_analyzed": 29,
-  "strategies_tested": 232,
+  "strategies_tested": 200,
   "best_strategies": [
-    {
-      "strategy": "Buy & Hold",
-      "total_return": 1.8158439051296196,
-      "annual_return": 0.5934982053901847,
-      "sharpe": 1.3683456092050283,
-      "max_drawdown": -0.295613194634547,
-      "trades": 1,
-      "stock": "300750"
-    },
-    {
-      "strategy": "MA Cross 5/20",
-      "total_return": 0.8569310084163368,
-      "annual_return": 0.32121856548791694,
-      "sharpe": 1.0476203132946655,
-      "max_drawdown": 0.0,
-      "trades": 30,
-      "stock": "002475"
-    },
-    {
-      "strategy": "MACD Trend",
-      "total_return": 0.6980356717476015,
-      "annual_return": 0.269083626713865,
-      "sharpe": 1.254253886205244,
-      "max_drawdown": 0.0,
-      "trades": 38,
-      "stock": "601318"
-    },
-    {
-      "strategy": "Buy & Hold",
-      "total_return": 0.2092126162922623,
-      "annual_return": 0.08925932825404859,
-      "sharpe": 0.43741111151952894,
-      "max_drawdown": -0.26893887125707194,
-      "trades": 1,
-      "stock": "600276"
-    },
     {
       "strategy": "Buy & Hold",
       "total_return": -0.4979020979020979,
@@ -182,10 +146,46 @@
       "max_drawdown": -0.7850617283950617,
       "trades": 1,
       "stock": "002594"
+    },
+    {
+      "strategy": "Buy & Hold",
+      "total_return": -0.5989590726283416,
+      "annual_return": 0,
+      "sharpe": -0.35234991647602726,
+      "max_drawdown": -0.6582189157039456,
+      "trades": 1,
+      "stock": "300760"
+    },
+    {
+      "strategy": "Buy & Hold",
+      "total_return": -0.21115300654891844,
+      "annual_return": 0,
+      "sharpe": -0.03969965957253148,
+      "max_drawdown": -0.5415384615384615,
+      "trades": 1,
+      "stock": "600036"
+    },
+    {
+      "strategy": "Buy & Hold",
+      "total_return": -0.6176842105263158,
+      "annual_return": 0,
+      "sharpe": -0.2415278490407052,
+      "max_drawdown": -0.7788929889298892,
+      "trades": 1,
+      "stock": "600438"
+    },
+    {
+      "strategy": "Buy & Hold",
+      "total_return": -0.3303985171455051,
+      "annual_return": 0,
+      "sharpe": -0.17206441790330912,
+      "max_drawdown": -0.4447380008806693,
+      "trades": 1,
+      "stock": "600519"
     }
   ],
   "summary": {
-    "avg_annual_return": 0.04389861123606949,
-    "avg_sharpe": -0.06798213565966538
+    "avg_annual_return": 0.0,
+    "avg_sharpe": -0.24316451417419047
   }
 }

@@ -1,16 +1,28 @@
 {
-  "analyst": "growth",
-  "stock": "宁德时代",
+  "analyst": "Growth Analyst",
   "stock_code": "300750",
-  "signal": "BUY",
-  "confidence": 0.9,
-  "timestamp": "2026-03-23T21:35:01.099518",
-  "analysis": {
-    "revenue_growth": 0.35,
-    "profit_growth": 0.42,
-    "tam": "10000亿元",
-    "market_share": "30%",
-    "innovation_score": 9
+  "timestamp": "2026-04-05T19:19:51.252295",
+  "signal": "HOLD",
+  "confidence": 0.6,
+  "reasoning": "缓慢成长：增长缓慢10%",
+  "metrics": {
+    "current_price": 386.46,
+    "revenue_growth": "10.0%",
+    "profit_growth": "10.0%",
+    "sgr": "10.0%",
+    "roe": "10.0%",
+    "gross_margin": "30.0%"
   },
-  "reasoning": "营收增长35%，利润增长42%，TAM 10000亿元，市场份额30%，创新能力9/10。"
+  "scores": {
+    "innovation_score": 5,
+    "quality_level": "中低"
+  },
+  "analysis": {
+    "revenue_growth": 0.1,
+    "profit_growth": 0.1,
+    "tam": "未知",
+    "market_share": "未知",
+    "innovation_score": 5
+  },
+  "quality": "缓慢成长"
 }

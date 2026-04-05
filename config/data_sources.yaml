@@ -1,0 +1,45 @@
+akshare:
+  enabled: true
+  priority: 1
+  timeout: 30
+alert_thresholds:
+  data_stale_days: 1
+  failure_rate: 0.5
+  quality_score_min: 60
+email_alert:
+  enabled: true
+  password: ${EMAIL_PASSWORD}
+  recipients:
+  - ${EMAIL_RECIPIENTS}
+  sender: ${EMAIL_SENDER}
+  smtp_port: 465
+  smtp_server: ${EMAIL_SMTP_SERVER}
+monitored_stocks:
+- code: 000895
+  name: 股票000895
+- code: '000333'
+  name: 股票000333
+- code: 000538
+  name: 股票000538
+- code: '002475'
+  name: 股票002475
+retry:
+  delay_seconds: 5
+  exponential_backoff: true
+  max_attempts: 3
+sina_finance:
+  enabled: true
+  priority: 3
+  timeout: 10
+tushare:
+  enabled: true
+  priority: 2
+  timeout: 30
+  token: ${TUSHARE_TOKEN}
+validation:
+  check_duplicates: true
+  check_missing: true
+  check_outliers: true
+  enabled: true
+  fill_missing: true
+  max_missing_pct: 20

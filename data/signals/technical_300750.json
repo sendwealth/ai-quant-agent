@@ -1,15 +1,26 @@
 {
-  "analyst": "technical",
-  "stock": "宁德时代",
+  "analyst": "Technical Analyst",
   "stock_code": "300750",
+  "stock": "",
+  "timestamp": "2026-04-05T19:19:47.519340",
   "signal": "HOLD",
   "confidence": 0.6,
-  "timestamp": "2026-03-23T21:35:01.126623",
-  "analysis": {
-    "rsi": 65,
-    "macd": "金叉",
+  "reasoning": "技术指标中性（买入2分，卖出2分）",
+  "metrics": {
+    "current_price": 386.46,
+    "rsi": 38.25,
+    "macd": 8.5157,
+    "macd_signal": 10.7536,
+    "macd_histogram": -2.2379,
+    "macd_status": "死叉",
     "ema_trend": "上升",
-    "volume": "放量"
+    "volume_status": "正常",
+    "volume": 24751501
   },
-  "reasoning": "RSI 65，MACD 金叉，EMA趋势上升，成交量放量。"
+  "analysis": {
+    "rsi": 38.25,
+    "macd": "死叉",
+    "ema_trend": "上升",
+    "volume": "正常"
+  }
 }

@@ -61,5 +61,60 @@ htmlcov/
 *.tar.gz
 *.zip
 
-# Archive (optional - uncomment if you don't want to track archived files)
-# .archive/
+# Archive
+.archive/
+
+# Temporary Python scripts
+ascii_*.py
+ascii_report.txt
+*_email*.py
+*_status_summary.md
+
+# Test cache
+.pytest_cache/
+
+# Virtual environment
+.venv/
+venv/
+
+# Environment variables
+.env
+.env.local
+
+# Data files (large)
+data/*.csv
+data/signals/*.json
+data/reports/*.json
+!data/.gitkeep
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+.coverage
+htmlcov/
+.coverage.*
+
+# Distribution
+dist/
+build/
+*.egg-info/
+
+# Temporary
+*.tmp
+*.bak
+*.backup
+*.pyc
+__pycache__/

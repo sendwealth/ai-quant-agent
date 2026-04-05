@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-04-04T11:47:28.937615",
+  "result": {
+    "data_health": {
+      "status": "ok",
+      "message": "数据新鲜（1天前）",
+      "latest_date": "2026-04-03"
+    },
+    "signals": {
+      "status": "error",
+      "message": "未找到分析结果"
+    },
+    "portfolio": {
+      "status": "empty",
+      "message": "未找到账户"
+    },
+    "risk": {
+      "status": "no_report",
+      "message": "未找到风险报告，请运行 risk_monitor.py"
+    },
+    "issues": []
+  }
+}

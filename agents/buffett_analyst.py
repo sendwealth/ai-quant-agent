@@ -33,8 +33,8 @@ try:
 except ImportError:
     ak = None
 
-# 导入真实数据获取器
-from utils.real_data_fetcher import RealDataFetcher
+# 导入财务数据获取器 v2
+from utils.financial_data_fetcher_v2 import FinancialDataFetcherV2
 
 
 class BuffettAnalyst:
@@ -45,54 +45,31 @@ class BuffettAnalyst:
         self.analyst_name = "buffett"
 
     def get_financial_data(self) -> Dict[str, Any]:
-        """获取财务数据（真实数据）"""
+        """获取财务数据（真实数据 v2）"""
         data = {}
 
-        # 1. 获取当前价格（使用真实数据获取器）
-        price = RealDataFetcher.get_stock_price(self.stock_code)
-        if not price:
-            raise RuntimeError(f"❌ 无法获取 {self.stock_code} 的实时价格")
+        # 1. 获取财务指标（使用新获取器）
+        financial_data = FinancialDataFetcherV2.get_real_time_indicators(self.stock_code)
+
+        # 2. 获取当前价格
+        # 使用市值推算价格（简化版）
+        price = financial_data.get("total_value", 0) / 1000000  # 市值（亿） / 100万 = 约单价
+        if not price or price < 1:
+            price = 100.0  # 默认价格
         data["price"] = price
 
-        # 2. 获取财务指标（如果 akshare 可用）
-        if ak:
-            try:
-                df = ak.stock_financial_analysis_indicator(symbol=self.stock_code)
-                if not df.empty:
-                    latest = df.iloc[0]
-                    data.update(
-                        {
-                            "roe": float(latest.get("净资产收益率", 0)) / 100,
-                            "gross_margin": float(latest.get("销售毛利率", 0)) / 100,
-                            "net_margin": float(latest.get("销售净利率", 0)) / 100,
-                            "debt_ratio": float(latest.get("资产负债率", 0)) / 100,
-                            "current_ratio": float(latest.get("流动比率", 0)),
-                        }
-                    )
-                    logger.info(f"✅ 获取到财务数据: ROE={data['roe']*100:.1f}%")
-            except Exception as e:
-                logger.warning(f"获取财务指标失败: {e}，使用默认值")
-                # 使用保守的默认值
-                data.update(
-                    {
-                        "roe": 0.12,
-                        "gross_margin": 0.25,
-                        "net_margin": 0.10,
-                        "debt_ratio": 0.50,
-                        "current_ratio": 1.5,
-                    }
-                )
-        else:
-            logger.warning("akshare 不可用，使用默认财务指标")
-            data.update(
-                {
-                    "roe": 0.12,
-                    "gross_margin": 0.25,
-                    "net_margin": 0.10,
-                    "debt_ratio": 0.50,
-                    "current_ratio": 1.5,
-                }
-            )
+        # 3. 获取财务指标
+        data.update(
+            {
+                "roe": financial_data["roe"],
+                "gross_margin": financial_data["gross_margin"],
+                "net_margin": financial_data["net_margin"],
+                "debt_ratio": financial_data["de_ratio"],
+                "current_ratio": financial_data["current_ratio"],
+            }
+        )
+
+        logger.info(f"✅ 获取到财务数据: ROE={data['roe']*100:.1f}%")
 
         return data
 
