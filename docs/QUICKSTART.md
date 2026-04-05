@@ -50,13 +50,13 @@ nano .env
 **最小配置**（必需）:
 ```bash
 # TuShare Token（免费）
-TUSHARE_TOKEN=33649d8db312befd2e253d93e9bd2860e9c5e819864c8a2078b3869b
+TUSHARE_TOKEN=YOUR_TUSHARE_TOKEN
 ```
 
 **完整配置**（推荐）:
 ```bash
 # TuShare Token
-TUSHARE_TOKEN=33649d8db312befd2e253d93e9bd2860e9c5e819864c8a2078b3869b
+TUSHARE_TOKEN=YOUR_TUSHARE_TOKEN
 
 # 邮件配置（用于告警）
 EMAIL_SMTP_SERVER=smtp.163.com

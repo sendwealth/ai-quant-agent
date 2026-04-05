@@ -1,15 +1,33 @@
 {
-  "analyst": "sentiment",
-  "stock": "立讯精密",
+  "analyst": "Sentiment Analyst",
   "stock_code": "002475",
+  "timestamp": "2026-04-05T20:08:16.694970",
   "signal": "HOLD",
   "confidence": 0.6,
-  "timestamp": "2026-03-23T21:20:34.433398",
-  "analysis": {
-    "news_sentiment": 0.58,
-    "social_sentiment": 0.65,
-    "insider_trading": "无",
-    "analyst_rating": "持有"
+  "reasoning": "市场情绪中性(综合得分-0.06)",
+  "metrics": {
+    "current_price": 48.8,
+    "overall_sentiment": -0.2
   },
-  "reasoning": "新闻情绪0.58，社交情绪0.65，内部人无，分析师评级持有。"
+  "analysis": {
+    "price_momentum": "小幅上涨",
+    "volume": "极低关注",
+    "technical": "RSI 49 (中性), MACD 金叉",
+    "volatility": "极高波动"
+  },
+  "scores": {
+    "momentum_sentiment": 0.2,
+    "volume_sentiment": -0.5,
+    "technical_sentiment": 0.3,
+    "volatility_sentiment": -0.8
+  },
+  "details": {
+    "returns": {
+      "5d": 0.08203445447088065,
+      "10d": 5.399568034557234,
+      "20d": 4.946236559139772
+    },
+    "volume_ratio": 0.56,
+    "annual_volatility": "51.3%"
+  }
 }

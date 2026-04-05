@@ -118,3 +118,14 @@ build/
 *.backup
 *.pyc
 __pycache__/
+
+# 忽略数据文件（可重新生成）
+data/reports/*.json
+data/signals/*.json
+data/cache/*.pkl
+data/*.csv
+
+# 但保留示例
+!data/reports/.gitkeep
+!data/signals/.gitkeep
+!data/cache/.gitkeep

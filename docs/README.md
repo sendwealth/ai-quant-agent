@@ -192,7 +192,7 @@ python3 scripts/config_manager.py check
 **创建 .env 文件**：
 ```bash
 # TuShare API Token（免费）
-TUSHARE_TOKEN=33649d8db312befd2e253d93e9bd2860e9c5e819864c8a2078b3869b
+TUSHARE_TOKEN=YOUR_TUSHARE_TOKEN
 
 # Email Alert Configuration
 EMAIL_SMTP_SERVER=smtp.163.com

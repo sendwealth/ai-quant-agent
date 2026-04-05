@@ -29,16 +29,44 @@ class FullBacktest:
         try:
             with open(config_file, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
-                return config.get("monitored_stocks", [])
+                stocks = config.get("monitored_stocks", [])
+                
+                # 如果配置文件为空，从动态选股结果读取Top 4
+                if not stocks:
+                    stocks = self._get_top_stocks_from_dynamic_selection(4)
+                
+                return stocks
         except Exception as e:
             print(f"⚠️  加载配置文件失败: {e}")
-            # 默认股票列表
-            return [
-                {"code": "300750", "name": "宁德时代"},
-                {"code": "002475", "name": "立讯精密"},
-                {"code": "601318", "name": "中国平安"},
-                {"code": "600276", "name": "恒瑞医药"},
-            ]
+            # 从动态选股结果读取Top 4
+            return self._get_top_stocks_from_dynamic_selection(4)
+    
+    def _get_top_stocks_from_dynamic_selection(self, top_n: int = 4) -> List[Dict]:
+        """从动态选股结果获取Top N股票"""
+        import json
+        from pathlib import Path
+        
+        reports_dir = Path("data/reports")
+        if not reports_dir.exists():
+            print("❌ 无动态选股结果，请先运行: python3 scripts/dynamic_stock_selector.py")
+            return []
+        
+        # 找到最新的动态选股报告
+        report_files = sorted(reports_dir.glob("dynamic_selection_*.json"), reverse=True)
+        if not report_files:
+            print("❌ 无动态选股报告")
+            return []
+        
+        try:
+            with open(report_files[0], "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            top_stocks = data.get("top_stocks", [])[:top_n]
+            print(f"✅ 从动态选股结果读取Top {len(top_stocks)}股票: {[s['code'] for s in top_stocks]}")
+            return top_stocks
+        except Exception as e:
+            print(f"⚠️  读取动态选股结果失败: {e}")
+            return []
 
     def load_signals(self, stock_code: str) -> Dict:
         """加载所有agent的信号"""
