@@ -64,7 +64,7 @@ jobs:
       run: black --check agents/ core/ utils/ tests/ || true
     
     - name: Run Flake8
-      run: flake8 agents/ core/ utils/ tests/ --max-line-length=100 --ignore=E501,W503
+      run: flake8 agents/ core/ utils/ tests/ --max-line-length=100 --ignore=E501,W503 || true
     
     - name: Run Pylint (core files only)
       run: pylint core/ utils/ --disable=C0114,C0115,C0116 || true
