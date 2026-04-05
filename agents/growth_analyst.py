@@ -100,7 +100,8 @@ class GrowthAnalyst:
                             "revenue_growth": revenue_growth,
                             "profit_growth": profit_growth,
                             "roe": safe_float(latest.get("净资产收益率"), 10.0, 0.0, 100.0) / 100,
-                            "gross_margin": safe_float(latest.get("销售毛利率"), 30.0, 0.0, 100.0) / 100,
+                            "gross_margin": safe_float(latest.get("销售毛利率"), 30.0, 0.0, 100.0)
+                            / 100,
                             "revenue": latest_revenue,
                             "profit": latest_profit,
                         }
@@ -205,7 +206,11 @@ class GrowthAnalyst:
 
         # 决策规则
         if revenue_growth > 0.30 and innovation_score >= 8:
-            return "BUY", 0.90, f"{quality}：营收增长{revenue_growth*100:.0f}%，创新能力{innovation_score}/10"
+            return (
+                "BUY",
+                0.90,
+                f"{quality}：营收增长{revenue_growth*100:.0f}%，创新能力{innovation_score}/10",
+            )
         elif revenue_growth > 0.25 and profit_growth > 0.20:
             return "BUY", 0.85, f"{quality}：营收和利润双高增长"
         elif revenue_growth > 0.20:

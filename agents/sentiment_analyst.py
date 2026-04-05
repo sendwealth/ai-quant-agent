@@ -81,7 +81,7 @@ class SentimentAnalyst:
         ret_20d = (close.iloc[-1] / close.iloc[-20] - 1) if len(df) >= 20 else 0
 
         # 加权平均(近期权重更高)
-        weighted_return = (ret_5d * 0.5 + ret_10d * 0.3 + ret_20d * 0.2)
+        weighted_return = ret_5d * 0.5 + ret_10d * 0.3 + ret_20d * 0.2
 
         # 转换为情绪分数(-1 到 1)
         if weighted_return > 0.10:
@@ -103,11 +103,15 @@ class SentimentAnalyst:
             momentum_sentiment = -0.8
             status = "强势下跌"
 
-        return momentum_sentiment, status, {
-            "5d": ret_5d * 100,
-            "10d": ret_10d * 100,
-            "20d": ret_20d * 100,
-        }
+        return (
+            momentum_sentiment,
+            status,
+            {
+                "5d": ret_5d * 100,
+                "10d": ret_10d * 100,
+                "20d": ret_20d * 100,
+            },
+        )
 
     def calculate_volume_sentiment(self, df: pd.DataFrame) -> tuple:
         """计算成交量情绪（市场关注度）"""
@@ -347,10 +351,18 @@ def main():
     logger.info(f"理由: {report['reasoning']}")
     logger.info(f"综合情绪: {report['metrics']['overall_sentiment']:.2f}")
     logger.info(f"\n分项情绪:")
-    logger.info(f"  价格动量: {report['analysis']['price_momentum']} ({report['scores']['momentum_sentiment']:.2f})")
-    logger.info(f"  成交量: {report['analysis']['volume']} ({report['scores']['volume_sentiment']:.2f})")
-    logger.info(f"  技术面: {report['analysis']['technical']} ({report['scores']['technical_sentiment']:.2f})")
-    logger.info(f"  波动率: {report['analysis']['volatility']} ({report['scores']['volatility_sentiment']:.2f})")
+    logger.info(
+        f"  价格动量: {report['analysis']['price_momentum']} ({report['scores']['momentum_sentiment']:.2f})"
+    )
+    logger.info(
+        f"  成交量: {report['analysis']['volume']} ({report['scores']['volume_sentiment']:.2f})"
+    )
+    logger.info(
+        f"  技术面: {report['analysis']['technical']} ({report['scores']['technical_sentiment']:.2f})"
+    )
+    logger.info(
+        f"  波动率: {report['analysis']['volatility']} ({report['scores']['volatility_sentiment']:.2f})"
+    )
     print("=" * 60)
 
 

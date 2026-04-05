@@ -134,9 +134,7 @@ class MultiSourceDataFetcher:
             else:
                 ts_code = f"{stock_code}.SZ"
 
-            df = self.pro.daily(
-                ts_code=ts_code, start_date=start_date, end_date=end_date
-            )
+            df = self.pro.daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
 
             if not df.empty:
                 # 标准化列名

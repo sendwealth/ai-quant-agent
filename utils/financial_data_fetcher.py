@@ -97,7 +97,10 @@ class FinancialDataFetcher:
             latest = df.iloc[0]
 
             # 获取财务指标
-            df_fin = self.pro.fina_indicator(ts_code=ts_code, fields="roe,roa,grossprofit_margin,netprofit_margin,debt_to_assets,current_ratio,quick_ratio")
+            df_fin = self.pro.fina_indicator(
+                ts_code=ts_code,
+                fields="roe,roa,grossprofit_margin,netprofit_margin,debt_to_assets,current_ratio,quick_ratio",
+            )
 
             if df_fin.empty:
                 # 只返回基础指标

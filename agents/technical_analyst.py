@@ -48,10 +48,10 @@ class TechnicalAnalyst:
     def get_price_data(self, days: int = 250) -> pd.DataFrame:
         """获取历史价格数据（多数据源）"""
         df = self.data_fetcher.get_stock_hist_data(self.stock_code, days=days)
-        
+
         if df is None or df.empty:
             raise RuntimeError(f"❌ 无法从任何数据源获取 {self.stock_code} 的历史数据")
-        
+
         logger.info(f"✅ 获取到 {len(df)} 天历史数据")
         return df
 
@@ -162,7 +162,7 @@ class TechnicalAnalyst:
 
         # 1. 获取数据
         df = self.get_price_data()
-        
+
         # 确保列名标准化
         column_mapping = {
             "收盘": "close",
@@ -174,7 +174,7 @@ class TechnicalAnalyst:
         for old_col, new_col in column_mapping.items():
             if old_col in df.columns:
                 df = df.rename(columns={old_col: new_col})
-        
+
         # 使用标准化后的列名
         close = df["close"]
         volume = df["volume"]
