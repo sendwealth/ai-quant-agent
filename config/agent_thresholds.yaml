@@ -1,0 +1,127 @@
+# Agent scoring thresholds — externalized from TechnicalAgent and FundamentalAgent
+# Modify these values to tune agent behaviour without changing code.
+
+technical:
+  # RSI thresholds
+  rsi:
+    oversold: 30                # below this → oversold
+    overbought: 70              # above this → overbought
+    oversold_buy_score: 2.0     # score added when oversold
+    near_oversold: 45           # below this (but above oversold) → mild buy
+    near_oversold_buy_score: 0.5
+    near_overbought: 60         # above this (but below overbought) → mild sell
+    near_overbought_sell_score: 0.5
+    overbought_sell_score: 2.0  # score added when overbought
+
+  # MACD scoring
+  macd:
+    golden_cross_score: 2.0     # hist > 0
+    death_cross_score: 2.0      # hist <= 0
+
+  # EMA trend scoring
+  ema:
+    uptrend_score: 1.5
+    downtrend_score: 1.5
+
+  # ADX trend strength multiplier
+  adx:
+    strong_threshold: 25        # ADX above this → strong trend
+    multiplier: 1.2             # multiply buy/sell scores by this
+
+  # Volume confirmation
+  volume:
+    high_ratio: 1.5             # above this → 放量 (volume surge)
+    low_ratio: 0.7              # below this → 缩量 (volume dry)
+    confirmation_score: 1.0     # added to whichever side is winning
+
+  # Signal generation thresholds
+  signal:
+    strong_buy_diff: 3.0        # diff >= this → strong BUY
+    strong_buy_confidence: 0.80
+    strong_sell_diff: -3.0      # diff <= this → strong SELL
+    strong_sell_confidence: 0.75
+    weak_buy_diff: 1.0          # diff >= this → weak BUY
+    weak_buy_confidence: 0.65
+    weak_sell_diff: -1.0        # diff <= this → weak SELL
+    weak_sell_confidence: 0.60
+    hold_confidence: 0.50       # otherwise → HOLD
+
+fundamental:
+  # Profitability scoring (base = 5)
+  profitability:
+    base: 5
+    roe_excellent: 0.15         # ROE above this → +2
+    roe_excellent_score: 2
+    roe_good: 0.10              # ROE above this → +1
+    roe_good_score: 1
+    net_margin_excellent: 0.15  # net margin above this → +1
+    net_margin_excellent_score: 1
+    net_margin_poor: 0.05       # net margin below this → -1
+    net_margin_poor_score: -1
+    min: 1
+    max: 10
+
+  # Valuation scoring (base = 5, lower PE/PB is better)
+  valuation:
+    base: 5
+    pe_cheap: 15                # PE below this → +3
+    pe_cheap_score: 3
+    pe_fair: 25                 # PE below this → +1
+    pe_fair_score: 1
+    pe_expensive: 35            # PE above this → -1
+    pe_expensive_score: -1
+    pe_very_expensive: 50       # PE above this → -2
+    pe_very_expensive_score: -2
+    pb_low: 2.0                 # PB below this → +1
+    pb_low_score: 1
+    pb_high: 6.0                # PB above this → -1
+    pb_high_score: -1
+    min: 1
+    max: 10
+
+  # Financial health scoring (base = 5)
+  health:
+    base: 5
+    debt_low: 0.4               # debt ratio below this → +2
+    debt_low_score: 2
+    debt_moderate: 0.6          # debt ratio below this → +1
+    debt_moderate_score: 1
+    debt_high: 0.8              # debt ratio above this → -2
+    debt_high_score: -2
+    current_ratio_strong: 2.0   # current ratio above this → +1
+    current_ratio_strong_score: 1
+    current_ratio_weak: 1.0     # current ratio below this → -2
+    current_ratio_weak_score: -2
+    min: 1
+    max: 10
+
+  # Growth scoring (base = 5)
+  growth:
+    base: 5
+    revenue_high: 0.30          # revenue growth above this → +3
+    revenue_high_score: 3
+    revenue_good: 0.15          # revenue growth above this → +1
+    revenue_good_score: 1
+    revenue_negative_score: -2  # revenue growth below 0 → -2
+    profit_high: 0.30           # profit growth above this → +1
+    profit_high_score: 1
+    profit_negative_score: -1   # profit growth below 0 → -1
+    min: 1
+    max: 10
+
+  # Signal generation thresholds (based on average score)
+  signal:
+    excellent_score: 7.5        # avg score >= this AND valuation >= 6 → strong BUY
+    excellent_min_valuation: 6
+    excellent_confidence_base: 0.60
+    excellent_confidence_divisor: 50
+    excellent_confidence_cap: 0.90
+    good_score: 6.0             # avg score >= this → BUY
+    good_confidence_base: 0.55
+    good_confidence_divisor: 50
+    good_confidence_cap: 0.80
+    fair_score: 4.5             # avg score >= this → HOLD
+    fair_confidence: 0.55
+    weak_score: 3.0             # avg score >= this → HOLD (weak)
+    weak_confidence: 0.50
+    poor_sell_confidence: 0.65  # avg score below weak_score → SELL

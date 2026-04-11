@@ -1,311 +1,265 @@
-# 🤖 AI Quant Agent - 智能量化交易系统
+# AI Quant Agent v3.0
 
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+LLM 增强的多 Agent 协作 A 股量化交易系统。规则引擎 + LLM 双引擎，支持自然语言交互。
 
-**版本**: v2.7.0  
-**状态**: ✅ 生产就绪  
-**健康度**: 97/100  
-**最后更新**: 2026-04-05 19:50
-
----
-
-## 🎯 项目简介
-
-企业级 AI 驱动量化交易系统，支持**多策略**、**多数据源**、**动态选股**、**7-Agent协作**。
-
-### ✨ 核心特性
-
-- 🤖 **7-Agent协作** - Buffet、Growth、Technical、Fundamentals、Sentiment、Risk、Portfolio Manager
-- 📊 **多策略融合** - 价值投资、成长投资、技术分析、基本面、情绪分析
-- 🔄 **动态选股** - 自动扫描29只股票，多维度评分，选择Top 10
-- 📈 **真实数据** - 腾讯/新浪实时行情，真实P/E、P/B、ROE
-- ⚡ **快速回测** - 支持单股、多股、完整回测
-- 🛡️ **风险控制** - 止损、止盈、仓位管理、相关性风险
-- 📧 **邮件告警** - 自动发送交易信号和风险报告
-
----
-
-## 📊 系统架构
+## 架构
 
 ```
-┌─────────────────────────────────────────────────────┐
-│              Portfolio Manager (Leader)              │
-│          最终决策 + 信号汇总 + 仓位分配              │
-└──────────────┬──────────────────────────────────────┘
-               │
-       ┌───────┴───────┐
-       │               │
-┌──────▼──────┐ ┌─────▼──────┐
-│ Buffett     │ │ Growth     │
-│ Analyst     │ │ Analyst    │
-│ (价值投资)   │ │ (成长投资) │
-└──────┬──────┘ └─────┬──────┘
-       │               │
-┌──────▼──────┐ ┌─────▼──────┐ ┌──────▼──────┐
-│ Technical   │ │Fundamentals│ │ Sentiment   │
-│ Analyst     │ │ Analyst    │ │ Analyst     │
-│ (技术分析)   │ │ (基本面)    │ │ (情绪分析)  │
-└──────┬──────┘ └─────┬──────┘ └──────┬──────┘
-       └───────┬───────┴──────────────┘
-               │
-       ┌───────▼───────┐
-       │ Risk Manager  │
-       │ (风险控制)     │
-       └───────────────┘
+数据源 (Tushare/AkShare/BaoStock)
+    ↓  [RateLimiter]  [并发获取]
+DataService (多源降级 + 缓存 + 校验 + 文件锁)
+    ↓
+┌─────────────┬─────────────┬─────────────┐
+│ Fundamental  │  Technical  │  Sentiment  │  ← 分析师 Agent
+│   Agent      │   Agent     │   Agent     │    (可配置阈值)
+└──────┬──────┴──────┬──────┴──────┬──────┘
+       └─────────────┼─────────────┘
+               Risk Agent          ← 信号共识 + 动态仓位 + LLM 风险解读
+                     ↓
+             Execution Agent        ← 模拟交易 + 止损止盈 + 审计日志
+                     ↓
+             BacktestEngine         ← Sharpe/Sortino/MaxDD + 确定性验证
+
+         ┌── LLM 层 (LangChain + OpenAI/智谱 GLM) ──┐
+         │  SentimentAgent (新闻情感)                  │
+         │  PlannerAgent   (指令解析)                  │
+         │  LLMReportGenerator (报告生成)              │
+         │  RiskAgent.interpret_risk (风险解读)        │
+         └────────────────────────────────────────────┘
 ```
 
----
+Agent 通过 **Orchestrator** 编排，使用结构化日志记录，返回标准化的 `AgentResult`。
+共享的 `Portfolio` + `CommissionModel` 确保回测与执行佣金计算一致。
+支持 **邮件通知** (交易信号、每日报告、异常告警) 和 **自然语言分析** (--prompt)。
 
-## 🚀 快速开始（5分钟）
+## 核心特性
 
-### 1️⃣ 安装依赖
+- **LLM 双引擎** — 规则引擎为基础，LangChain ChatOpenAI 提供情感分析、报告生成、风险解读
+- **双 Provider** — OpenAI / 智谱 GLM 自动切换，`openai_api_key` 优先，`zhipu_api_key` 备选
+- **自然语言交互** — `--prompt "分析宁德时代的买入机会"` 智能解析股票代码和分析范围
+- **真实数据** — Tushare 财务报表 + AkShare 行情，ROE 从报表计算，FinancialSnapshot schema 验证
+- **多 Agent 协作** — 基本面 + 技术面 + 情感 → 风控共识 → 执行，Orchestrator 统一编排
+- **回测引擎** — Sharpe/Sortino/Calmar/MaxDD/Alpha/Beta 全指标 + 确定性验证
+- **风控系统** — 动态仓位、止损止盈、信号共识机制，参数通过 Settings 配置
+- **数据安全** — 文件锁 + 原子写入、速率限制、输入校验、token 防泄露
+- **持久化交易** — PaperTradingService 支持进程重启恢复
+- **审计追踪** — 追加式 JSONL 日志，记录每笔交易决策
+- **可配置** — Agent 评分阈值外部化 (YAML)，无代码调优
+- **高性能** — 并发数据获取 (ThreadPoolExecutor)、向量化指标计算
+- **邮件通知** — 交易信号实时推送、每日报告汇总、系统异常告警 (SMTP)
+
+## Quick Start
+
+### Step 1: 安装
 
 ```bash
-git clone https://github.com/sendwealth/ai-quant-agent.git
-cd ai-quant-agent
-make install
+git clone <repo-url> && cd ai-quant-agent
+uv sync
 ```
 
-### 2️⃣ 配置环境
+### Step 2: 配置
 
 ```bash
-# 复制配置模板
 cp .env.example .env
-
-# 编辑配置（填入你的token）
-nano .env
 ```
 
-### 3️⃣ 检查系统
+编辑 `.env`，**最少只需填一个**数据源 token 即可运行：
 
 ```bash
-make check
+# 必填 (至少一个，用于获取行情和财务数据)
+QUANT_TUSHARE_TOKEN=你的token    # 注册: https://tushare.pro
+
+# 可选 — 没有 LLM key 也能跑，跳过情感分析和报告生成
+QUANT_ZHIPU_API_KEY=xxx         # 智谱 (免费额度: https://open.bigmodel.cn)
+# 或
+QUANT_OPENAI_API_KEY=sk-xxx     # OpenAI
+
+# 可选 — 收邮件通知
+QUANT_EMAIL_ENABLED=true
+QUANT_EMAIL_SENDER=xxx@163.com
+QUANT_EMAIL_PASSWORD=授权码      # 163邮箱: 设置 → POP3/SMTP → 开启 → 获取授权码
+QUANT_EMAIL_RECIPIENTS=xxx@163.com
 ```
 
-### 4️⃣ 运行回测
+### Step 3: 运行
 
 ```bash
-python scripts/full_backtest.py
+# 单股分析
+uv run python -m quant_agent.main --stock 300750
+
+# 用中文提问 (需要 LLM key)
+uv run python -m quant_agent.main --prompt "贵州茅台现在能买吗"
+
+# 批量分析 4 只股票 + 邮件汇总
+uv run python -m quant_agent.main --daily-report
 ```
 
-**完成！** 🎉
+### 股票代码格式
 
----
+| 市场 | 前缀 | 示例 |
+|---|---|---|
+| 上海主板 | 60xxxx | 600519 (贵州茅台) |
+| 深圳主板 | 00xxxx | 000858 (五粮液) |
+| 创业板 | 30xxxx | 300750 (宁德时代) |
+| 北交所 | 8xxxxx | 830799 |
 
-## 📈 最新成果
-
-### 🏆 动态选股系统 (2026-04-05)
-
-**自动评分**: 29只股票 → Top 10推荐
-
-**评分维度**:
-- 技术面 (30%): MA趋势、RSI、MACD、成交量
-- 财务面 (40%): P/E、P/B、ROE、负债率
-- 成长性 (30%): 价格增长、波动率、最大回撤
-
-**Top 3推荐**:
-1. **000895** - 74分 (技术100)
-2. **000333** - 71分 (财务80, P/E低估13.2)
-3. **000538** - 68分 (技术85)
-
-### 📊 回测结果 (2026-04-05)
-
-**立讯精密 (002475)**:
-- 🟢 信号: **BUY**
-- 信心度: **71%**
-- 建议: 技术面90分，财务面65分
-
-**中国平安 (601318)**:
-- 🟡 信号: **HOLD**
-- 信心度: 64%
-- P/E低估: 7.7
-
----
-
-## 📁 项目结构
+### 输出解读
 
 ```
-ai-quant-agent/
-├── agents/              # 7个智能代理
-│   ├── buffett_analyst.py      # 巴菲特分析师
-│   ├── growth_analyst.py       # 成长分析师
-│   ├── technical_analyst.py    # 技术分析师
-│   ├── fundamentals_analyst.py # 基本面分析师
-│   ├── sentiment_analyst.py    # 情绪分析师
-│   ├── risk_manager.py         # 风险管理
-│   └── strategy_agent.py       # 策略代理
-│
-├── scripts/             # 核心脚本 (14个)
-│   ├── full_backtest.py        # 完整回测
-│   ├── dynamic_stock_selector.py # 动态选股
-│   ├── quant_monitor.py        # 量化监控
-│   └── heartbeat_check.py      # 心跳检查
-│
-├── core/                # 核心模块
-│   ├── data_manager.py         # 数据管理
-│   ├── cache.py                # 缓存系统
-│   └── indicators.py           # 技术指标
-│
-├── utils/               # 工具函数
-│   ├── financial_data_fetcher_v2.py # 财务数据
-│   ├── multi_source_data_fetcher.py # 多数据源
-│   └── logger.py               # 日志系统
-│
-├── config/              # 配置文件
-│   ├── data_sources.yaml       # 数据源配置
-│   └── strategy_v5.yaml        # 策略配置
-│
-├── docs/                # 文档 (12个)
-│   ├── QUICKSTART.md           # 快速开始
-│   ├── OPERATION_GUIDE.md      # 操作指南
-│   └── PROJECT_SUMMARY.md      # 项目总结
-│
-└── tests/               # 测试文件 (7个)
+OK   fundamental: BUY  (85%)   ← 基本面: ROE 22%, PE 18, 低负债
+OK   technical:   BUY  (90%)   ← 技术面: RSI 超卖, MACD 金叉
+OK   sentiment:   BUY  (75%)   ← 情感面: 政策利好 (需要 LLM key)
+
+Risk: BUY  仓位 16.7%          ← 风控共识: 3/3 投票买入
+  止损: 368.00 | 止盈: 440.00 / 480.00
+
+BUY executed: 300750 200股 @ 400.00
+  Total equity: 99995.00
 ```
 
----
+### 收到邮件的条件
 
-## 📊 项目统计
+风控信号为 **BUY** 或 **SELL** 时自动发送 HTML 邮件，包含 Agent 投票表和交易详情。
+HOLD 不发邮件（避免信息轰炸）。
 
-| 指标 | 数量 |
-|------|:----:|
-| Python文件 | 62 |
-| 代码行数 | 12,591 |
-| Agents | 10 |
-| 脚本 | 14 |
-| 测试 | 7 |
-| 文档 | 12 |
-
----
-
-## 🛠️ 核心功能
-
-### 1️⃣ 多Agent协作
-
-**7个专业分析师**:
-- **Buffett Analyst**: 价值投资（护城河、ROE、DCF）
-- **Growth Analyst**: 成长投资（营收增长、利润增长）
-- **Technical Analyst**: 技术分析（RSI、MACD、MA）
-- **Fundamentals Analyst**: 基本面（P/E、P/B、财务健康度）
-- **Sentiment Analyst**: 情绪分析（市场情绪、新闻情绪）
-- **Risk Manager**: 风险控制（止损、止盈、仓位）
-- **Portfolio Manager**: 最终决策（信号汇总、仓位分配）
-
-### 2️⃣ 动态选股系统
-
-**自动扫描**: 29只股票  
-**多维度评分**: 技术 + 财务 + 成长  
-**智能推荐**: Top 10优质股票  
-**自动更新**: 每周重新评分
-
-### 3️⃣ 真实数据获取
-
-**3个数据源**:
-- 🟢 腾讯财经 (实时P/E、P/B)
-- 🟢 新浪财经 (备用)
-- 🟢 Tushare (历史数据)
-
-**自动切换**: 失败率>50%自动通知
-
-### 4️⃣ 风险管理
-
-**多层防护**:
-- 🛡️ 止损: -8%自动卖出
-- 🛡️ 止盈: +15%卖50%, +25%清仓
-- 🛡️ 仓位控制: 单只≤30%, 总仓位≤80%
-- 🛡️ 相关性风险: 组合相关性监控
-
----
-
-## 🧪 测试
+### 每日定时运行
 
 ```bash
-# 运行所有测试
-pytest
-
-# 运行特定测试
-pytest tests/test_indicators.py
-
-# 覆盖率报告
-pytest --cov=. --cov-report=html
+# Linux/Mac crontab — 每个交易日 9:15 自动分析
+crontab -e
+# 添加:
+15 9 * * 1-5 cd /path/to/ai-quant-agent && uv run python -m quant_agent.main --daily-report >> /tmp/quant.log 2>&1
 ```
 
----
+### 跑测试
 
-## 📧 邮件告警
-
-**自动发送**:
-- 📊 交易信号 (BUY/SELL/HOLD)
-- ⚠️ 风险告警 (止损/止盈)
-- 📈 每日报告 (持仓、收益、风险)
-
-**配置**:
 ```bash
-# .env
-EMAIL_SMTP_SERVER=smtp.163.com
-EMAIL_SENDER=your@email.com
-EMAIL_PASSWORD=your_auth_code
-EMAIL_RECIPIENTS=recipient@email.com
+uv run pytest tests/ -v                           # 全量 391 测试
+uv run pytest tests/unit/ -v                      # 367 单元测试
+uv run pytest tests/test_integration.py -v        # 24 集成测试
+uv run pytest tests/unit/test_risk_enhanced.py -v # 风控增强测试 (T+1/熔断)
 ```
 
----
+## 项目结构
 
-## 🔄 定时任务
+```
+src/quant_agent/
+├── main.py                 # CLI 入口 (--stock / --prompt / --daily-report)
+├── orchestrator.py         # Orchestrator 编排器 + AnalysisReport
+├── config.py               # Pydantic Settings (QUANT_ 前缀)
+├── portfolio.py            # 统一 Portfolio + CommissionModel
+├── audit.py                # 追加式审计日志 (JSONL)
+├── thresholds.py           # Agent 评分阈值加载器
+├── llm/                    # LLM 层 (LangChain)
+│   ├── client.py           # LLMClient (OpenAI/智谱自动切换)
+│   ├── prompts.py          # 所有 prompt 模板 (情感/规划/报告/风险)
+│   └── report.py           # LLMReportGenerator (综合报告生成)
+├── data/                   # 数据层
+│   ├── sources/            # Tushare + AkShare + BaoStock 适配器
+│   ├── rate_limiter.py     # Token bucket 速率限制
+│   ├── service.py          # 统一入口 (降级链 + 并发)
+│   ├── normalizer.py       # 标准化
+│   ├── validator.py        # 校验
+│   └── store.py            # Parquet 存储 (文件锁 + 原子写入)
+├── strategy/indicators.py  # 指标库 (RSI/MACD/EMA/ATR/...)
+├── backtest/engine.py      # 回测引擎
+├── events/bus.py           # 事件总线 (保留用于未来异步)
+├── agents/                 # Agent 框架
+│   ├── base.py             # BaseAgent + AgentResult + 结构化日志
+│   ├── fundamental.py      # 基本面 (可配置阈值)
+│   ├── technical.py        # 技术面 (可配置阈值)
+│   ├── sentiment.py        # 情感分析 (LLM 新闻情感 → AgentResult)
+│   ├── planner.py          # 指令解析 (自然语言 → ExecutionPlan)
+│   ├── risk.py             # 风控 (共识 + T+1 + 熔断 + 仓位 + LLM 风险解读)
+│   └── execution.py        # 执行 (审计日志)
+├── execution/
+│   └── paper_trading.py    # 持久化模拟交易
+├── notification/
+│   └── email.py            # 邮件通知 (SMTP)
+└── observability/          # 监控
+config/
+└── agent_thresholds.yaml   # Agent 评分阈值配置
+tests/
+├── unit/                   # 334 单元测试
+└── test_integration.py     # 24 集成测试
+```
 
-**推荐配置**:
+## 技术栈
+
+| 组件 | 选型 |
+|------|------|
+| 语言 | Python 3.10+ |
+| 包管理 | uv |
+| LLM | LangChain (OpenAI / 智谱 GLM 双 Provider) |
+| 数据源 | akshare, tushare, baostock |
+| 配置 | pydantic-settings + YAML |
+| 存储 | Parquet (文件锁) → PostgreSQL/TimescaleDB |
+| 测试 | pytest + pytest-cov (391 tests) |
+| 并发 | concurrent.futures.ThreadPoolExecutor |
+
+## LLM 使用场景
+
+| 场景 | 模块 | 输入 → 输出 |
+|---|---|---|
+| 分析报告生成 | `llm/report.py` | AgentResult[] → Markdown 投资分析报告 |
+| 情感分析 | `agents/sentiment.py` | 新闻数据 → AgentResult (BUY/SELL/HOLD) |
+| 智能指令解析 | `agents/planner.py` | 自然语言 → ExecutionPlan (stock_code, days, focus) |
+| 风险解读 | `agents/risk.py` | 风控结果 → 自然语言风险解读 |
+
+LLM 不可用时自动跳过增强功能，规则引擎正常运行。
+
+## 指标库
+
+RSI, MACD, EMA, SMA, Bollinger Bands, ATR, ADX, CCI, OBV, Williams %R, ROC, Momentum, 成交量分析
+
+## 回测指标
+
+总收益, 年化收益, 最大回撤, Sharpe Ratio, Sortino Ratio, Calmar Ratio, 胜率, 盈亏比, Beta, Alpha
+
+## 风控参数
+
+| 参数 | 默认值 | 环境变量 |
+|------|--------|----------|
+| 单只仓位上限 | 20% | QUANT_MAX_POSITION_PCT |
+| 组合最大风险敞口 | 80% | QUANT_MAX_PORTFOLIO_RISK |
+| 止损线 | -8% | QUANT_DEFAULT_STOP_LOSS |
+| 止盈线 | +10% / +20% | QUANT_DEFAULT_TAKE_PROFIT_1/2 |
+| 日亏损熔断 | -3% | QUANT_MAX_DAILY_LOSS_PCT |
+| T+1 限制 | 自动 | 内置 (A 股规则) |
+| 佣金 | 万三 (最低5元) | QUANT_COMMISSION_RATE |
+| 印花税 | 千一 (仅卖出) | QUANT_STAMP_TAX_RATE |
+| 回测整手 | 100 股 | 内置 (A 股规则) |
+
+## 环境变量
+
+完整列表见 `.env.example`，常用配置：
+
 ```bash
-# 数据更新（每天9:15）
-0 9:15 * * 1-5 cd /path/to/ai-quant-agent && python scripts/data_updater_robust.py
+# 数据源
+QUANT_TUSHARE_TOKEN=xxx          # Tushare API token
 
-# 心跳检查（每30分钟）
-*/30 * * * * cd /path/to/ai-quant-agent && python scripts/heartbeat_check_enhanced.py
+# LLM (二选一，OpenAI 优先)
+QUANT_OPENAI_API_KEY=xxx         # OpenAI API key
+QUANT_ZHIPU_API_KEY=xxx          # 智谱 API key (GLM-4)
+QUANT_OPENAI_MODEL=gpt-4o        # 模型名称 (可选)
+QUANT_OPENAI_BASE_URL=https://api.openai.com/v1  # 可覆盖
 
-# 动态选股（每周一9:00）
-0 9 * * 1 cd /path/to/ai-quant-agent && python scripts/dynamic_stock_selector.py
+# 通用
+QUANT_DATA_DIR=./data            # 数据目录 (可选)
+QUANT_FETCH_MAX_WORKERS=5        # 并发获取线程数 (可选)
+
+# 邮件通知 (可选)
+QUANT_EMAIL_ENABLED=true
+QUANT_EMAIL_SMTP_SERVER=smtp.163.com
+QUANT_EMAIL_SENDER=your@163.com
+QUANT_EMAIL_PASSWORD=smtp_auth_code
+QUANT_EMAIL_RECIPIENTS=to@example.com
 ```
 
----
+## License
 
-## 📚 文档
+MIT
 
-- [快速开始](docs/QUICKSTART.md)
-- [操作指南](docs/OPERATION_GUIDE.md)
-- [配置管理](docs/CONFIG_MANAGEMENT.md)
-- [项目总结](docs/PROJECT_SUMMARY.md)
-- [安全事件报告](docs/SECURITY_INCIDENT_REPORT.md)
+## 免责声明
 
----
-
-## 🤝 贡献
-
-欢迎贡献！请查看 [贡献指南](CONTRIBUTING.md)
-
----
-
-## 📄 许可证
-
-[MIT License](LICENSE)
-
----
-
-## 🔗 相关链接
-
-- **GitHub**: https://github.com/sendwealth/ai-quant-agent
-- **文档**: [docs/](docs/)
-- **问题反馈**: [Issues](https://github.com/sendwealth/ai-quant-agent/issues)
-
----
-
-## ⚠️ 免责声明
-
-**本项目仅供学习和研究使用，不构成投资建议。**
-
-股市有风险，投资需谨慎。使用本系统进行实盘交易的盈亏由用户自行承担。
-
----
-
-**最后更新**: 2026-04-05 19:50  
-**版本**: v2.7.0 (简化版)  
-**健康度**: 97/100 ⭐⭐⭐⭐⭐
+本项目仅供学习研究，不构成投资建议。股市有风险，投资需谨慎。
