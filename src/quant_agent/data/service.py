@@ -1,4 +1,4 @@
-"""数据服务 — 统一入口，多数据源降级 + 缓存"""
+"""数据服务 — 统一入口，多数据源降级 + 缓存 + 修复 + 离线"""
 
 from __future__ import annotations
 
@@ -12,8 +12,9 @@ from ..config import Settings, get_settings
 from .sources.base import DataSource, FinancialSnapshot
 from .sources.tushare import TushareSource
 from .sources.akshare import AkshareSource
+from .sources.baostock import BaoStockSource
 from .normalizer import normalize_price_data
-from .validator import validate_price_data, clean_price_data
+from .validator import validate_price_data, clean_price_data, repair_price_data
 from .validators import validate_stock_code
 from .store import DataStore
 
@@ -23,14 +24,15 @@ logger = logging.getLogger(__name__)
 class DataService:
     """数据服务统一入口
 
-    数据获取优先级：缓存 → 本地存储 → Tushare → AkShare
+    数据获取优先级：缓存 → 本地存储 → Tushare → efinance → AkShare → BaoStock
+    支持：离线模式、数据修复、财务多源合并
     """
 
     def __init__(self, settings: Optional[Settings] = None):
         self.settings = settings or get_settings()
         self.store = DataStore(self.settings.parquet_dir)
 
-        # 初始化数据源
+        # 初始化数据源（按优先级顺序）
         self._sources: list[DataSource] = []
 
         # Tushare（财务数据主力）
@@ -38,28 +40,59 @@ class DataService:
             self._tushare = TushareSource(token=self.settings.tushare_token)
             if self._tushare.available:
                 self._sources.append(self._tushare)
-                logger.info("✅ Tushare 数据源就绪")
+                logger.info("Tushare data source ready")
         except Exception as e:
-            logger.warning(f"⚠️ Tushare 初始化失败: {e}")
+            logger.warning(f"Tushare init failed: {e}")
+
+        # efinance（免费稳定，东方财富 API）
+        try:
+            from .sources.efinance import EfinanceSource
+            self._efinance = EfinanceSource()
+            if self._efinance.available:
+                self._sources.append(self._efinance)
+                logger.info("efinance data source ready")
+        except Exception as e:
+            logger.warning(f"efinance init failed: {e}")
 
         # AkShare（行情数据主力，免费）
         try:
             self._akshare = AkshareSource(timeout=self.settings.akshare_timeout)
             if self._akshare.available:
                 self._sources.append(self._akshare)
-                logger.info("✅ AkShare 数据源就绪")
+                logger.info("AkShare data source ready")
         except Exception as e:
-            logger.warning(f"⚠️ AkShare 初始化失败: {e}")
+            logger.warning(f"AkShare init failed: {e}")
+
+        # BaoStock（免费行情，降级备选）
+        try:
+            self._baostock = BaoStockSource()
+            if self._baostock.available:
+                self._sources.append(self._baostock)
+                logger.info("BaoStock data source ready")
+        except Exception as e:
+            logger.warning(f"BaoStock init failed: {e}")
 
     @property
     def tushare(self) -> Optional[TushareSource]:
         return self._tushare if hasattr(self, "_tushare") else None
 
     @property
+    def efinance(self):
+        return self._efinance if hasattr(self, "_efinance") else None
+
+    @property
     def akshare(self) -> Optional[AkshareSource]:
         return self._akshare if hasattr(self, "_akshare") else None
 
+    @property
+    def baostock(self) -> Optional[BaoStockSource]:
+        return self._baostock if hasattr(self, "_baostock") else None
+
     # ── 行情数据 ──
+
+    def _cache_max_age_hours(self) -> float:
+        """Get cache TTL from settings (convert seconds → hours)."""
+        return getattr(self.settings, "data_cache_ttl", 14400) / 3600
 
     def get_price_data(
         self,
@@ -70,17 +103,28 @@ class DataService:
     ) -> Optional[pd.DataFrame]:
         """获取标准化行情数据
 
-        优先级: 缓存/存储 → 各数据源依次尝试
+        优先级: 缓存/存储 → 各数据源依次尝试（含数据修复）
         """
         stock_code = validate_stock_code(stock_code)
+
+        # 离线模式：只读缓存
+        if getattr(self.settings, "offline_mode", False):
+            df = self.store.load_price(stock_code)
+            if df is not None:
+                logger.info(f"Offline mode: using cached data for {stock_code}")
+                return normalize_price_data(df)
+            logger.warning(f"Offline mode: no cached data for {stock_code}")
+            return None
+
         # 1. 尝试缓存
-        if use_cache and self.store.is_fresh(stock_code, max_age_hours=4):
+        max_age = self._cache_max_age_hours()
+        if use_cache and self.store.is_fresh(stock_code, max_age_hours=max_age):
             df = self.store.load_price(stock_code)
             if df is not None and len(df) >= days * 0.8:
-                logger.info(f"📦 缓存命中: {stock_code} ({len(df)}行)")
+                logger.info(f"Cache hit: {stock_code} ({len(df)} rows)")
                 return normalize_price_data(df)
 
-        # 2. 依次尝试数据源
+        # 2. 依次尝试数据源（含数据修复）
         for source in self._sources:
             df = source.get_price_data(stock_code, days)
             if df is not None and not df.empty:
@@ -89,8 +133,22 @@ class DataService:
                 # 校验
                 report = validate_price_data(df)
                 if not report.is_valid:
-                    logger.warning(f"数据校验失败 ({source.name}): {report.errors}")
-                    continue
+                    # 尝试修复再校验
+                    logger.warning(
+                        f"Validation failed ({source.name}): {report.errors}, "
+                        f"attempting repair"
+                    )
+                    repaired = repair_price_data(df)
+                    if repaired is not None and not repaired.empty:
+                        report2 = validate_price_data(repaired)
+                        if report2.is_valid:
+                            logger.info(f"Data repaired for {stock_code} from {source.name}")
+                            df = repaired
+                        else:
+                            logger.warning(f"Repair failed for {stock_code}: {report2.errors}")
+                            continue
+                    else:
+                        continue
 
                 # 清洗
                 if clean:
@@ -100,7 +158,7 @@ class DataService:
                 self.store.save_price(stock_code, df, source=source.name)
                 return df
 
-        logger.error(f"❌ 所有数据源失败: {stock_code}")
+        logger.error(f"All sources failed: {stock_code}")
         return None
 
     def get_realtime_price(self, stock_code: str) -> Optional[float]:
@@ -117,24 +175,70 @@ class DataService:
     def get_financial_snapshot(
         self, stock_code: str, max_age_days: int = 365
     ) -> Optional[FinancialSnapshot]:
-        """获取财务快照（真实数据）
+        """获取财务快照 — 多源降级 + 合并。
 
-        优先使用 Tushare（财务报表数据最全），降级到本地缓存
+        降级链: Tushare → efinance → AkShare → 本地缓存。
+        多源合并: 如果单个源数据不完整，尝试从多个源填补空字段。
 
         Args:
             stock_code: 股票代码
             max_age_days: 缓存财务数据最大允许天数（默认365天）
         """
         stock_code = validate_stock_code(stock_code)
-        # 1. Tushare（真实财务报表）
-        if self.tushare and self.tushare.available:
-            snapshot = self.tushare.get_financial_snapshot(stock_code)
-            if snapshot is not None:
-                # 持久化
-                self.store.save_financial(stock_code, snapshot.to_dict(), source="tushare")
-                return snapshot
 
-        # 2. 本地缓存（检查过期）
+        # 离线模式：只读缓存
+        if getattr(self.settings, "offline_mode", False):
+            return self._load_cached_financial(stock_code, max_age_days)
+
+        # 1. 遍历所有支持 get_financial_snapshot 的数据源
+        snapshots: dict[str, FinancialSnapshot] = {}
+        for source in self._sources:
+            get_fn = getattr(source, "get_financial_snapshot", None)
+            if get_fn is None:
+                continue
+            try:
+                snapshot = get_fn(stock_code)
+                if snapshot is not None:
+                    snapshots[source.name] = snapshot
+            except Exception as e:
+                logger.warning(f"Financial snapshot failed ({source.name}): {e}")
+
+        # 2. 如果获得完整快照，直接返回
+        for name, snap in snapshots.items():
+            report = snap.validate()
+            if not report.missing_required:
+                self.store.save_financial(
+                    stock_code, snap.to_dict(), source=name
+                )
+                return snap
+
+        # 3. 多源合并（填补空字段）
+        if snapshots:
+            merged_data: dict[str, Any] = {}
+            for name, snap in snapshots.items():
+                for key in FinancialSnapshot.SCHEMA:
+                    val = snap.get(key)
+                    if val is not None and key not in merged_data:
+                        merged_data[key] = val
+
+            if merged_data:
+                merged = FinancialSnapshot(stock_code, merged_data)
+                logger.info(
+                    f"Merged financial data from {list(snapshots.keys())} "
+                    f"for {stock_code}"
+                )
+                self.store.save_financial(
+                    stock_code, merged.to_dict(), source="merged"
+                )
+                return merged
+
+        # 4. 本地缓存降级
+        return self._load_cached_financial(stock_code, max_age_days)
+
+    def _load_cached_financial(
+        self, stock_code: str, max_age_days: int = 365
+    ) -> Optional[FinancialSnapshot]:
+        """Load financial data from local parquet cache."""
         cached = self.store.load_financial(stock_code, latest=True)
         if cached is not None and not cached.empty:
             data = cached.iloc[0].to_dict()
@@ -151,15 +255,14 @@ class DataService:
                     age_days = (datetime.now() - rd).days
                     if age_days > max_age_days:
                         logger.warning(
-                            f"⚠️ 缓存财务数据过期 ({age_days}天 > {max_age_days}天): {stock_code}"
+                            f"Cached financial data expired ({age_days}d > {max_age_days}d): "
+                            f"{stock_code}"
                         )
                         return None
                 except (ValueError, TypeError):
                     pass
-            logger.info(f"📦 使用缓存财务数据: {stock_code}")
+            logger.info(f"Using cached financial data: {stock_code}")
             return FinancialSnapshot(stock_code, data)
-
-        logger.error(f"❌ 无法获取财务数据: {stock_code}")
         return None
 
     def get_financial_statements(
@@ -232,3 +335,28 @@ class DataService:
             if snapshot is not None:
                 results[code] = snapshot
         return results
+
+    # ── 新闻数据 ──
+
+    def get_news(self, stock_code: str, count: int = 20) -> Optional[pd.DataFrame]:
+        """获取个股新闻
+
+        Args:
+            stock_code: 股票代码
+            count: 获取新闻条数
+
+        Returns:
+            DataFrame with news items or None
+        """
+        stock_code = validate_stock_code(stock_code)
+        for source in self._sources:
+            fetch_fn = getattr(source, "get_news", None)
+            if fetch_fn is None:
+                continue
+            try:
+                df = fetch_fn(stock_code, count)
+                if df is not None and not df.empty:
+                    return df
+            except Exception as e:
+                logger.warning(f"新闻获取失败 ({source.name}): {e}")
+        return None

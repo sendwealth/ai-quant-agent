@@ -88,9 +88,11 @@ class TushareSource(DataSource):
             return False
 
     def _to_ts_code(self, stock_code: str) -> str:
-        """转换股票代码: 300750 → 300750.SZ"""
+        """转换股票代码: 300750 → 300750.SZ, 600519 → 600519.SH, 830799 → 830799.BJ"""
         if stock_code.startswith("6"):
             return f"{stock_code}.SH"
+        if stock_code.startswith("8"):
+            return f"{stock_code}.BJ"
         return f"{stock_code}.SZ"
 
     @retry(max_retries=3)

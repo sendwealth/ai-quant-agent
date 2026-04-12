@@ -33,6 +33,8 @@ def mock_settings(tmp_path):
     settings.akshare_timeout = 5
     settings.fetch_max_workers = 1  # 顺序执行（保持与原有测试行为一致）
     settings.debug = True
+    settings.offline_mode = False
+    settings.data_cache_ttl = 14400  # 4 hours in seconds
     return settings
 
 
@@ -147,9 +149,8 @@ class TestDataServiceFallback:
         result = ds.get_price_data("300750", use_cache=False, clean=False)
         assert result is not None
         src1.get_price_data.assert_called_once()
-        src2.get_price_data.assert_called_once()
-
-    def test_cache_hit_skips_sources(self, mock_settings, sample_price_df):
+        # Source1 data was repaired via forward-fill, so source2 NOT called
+        src2.get_price_data.assert_not_called()
         """缓存命中时不调用数据源"""
         ds = _build_service(mock_settings, [])
         ds.store.is_fresh.return_value = True
@@ -216,18 +217,14 @@ class TestDataServiceFallback:
         assert result is None
 
     def test_financial_snapshot_tushare_succeeds(self, mock_settings):
-        """Tushare 返回财务快照时，数据被持久化并返回"""
+        """Source returns financial snapshot, data is persisted and returned"""
         from quant_agent.data.sources.base import FinancialSnapshot
 
         snapshot = FinancialSnapshot("300750", {"roe": 0.18, "pe_ttm": 25.0, "pb": 5.6})
+        mock_source = _make_source("tushare", financial_snapshot=snapshot)
 
-        ds = _build_service(mock_settings, [])
-        mock_tushare = MagicMock()
-        mock_tushare.available = True
-        mock_tushare.get_financial_snapshot.return_value = snapshot
-
-        with patch.object(type(ds), "tushare", new_callable=PropertyMock, return_value=mock_tushare):
-            result = ds.get_financial_snapshot("300750")
+        ds = _build_service(mock_settings, [mock_source])
+        result = ds.get_financial_snapshot("300750")
 
         assert result is not None
         assert result.roe == 0.18
@@ -235,20 +232,13 @@ class TestDataServiceFallback:
         ds.store.save_financial.assert_called_once()
 
     def test_financial_snapshot_tushare_fails_fallback_to_cache(self, mock_settings):
-        """Tushare 不可用时，降级到本地缓存"""
-        from quant_agent.data.sources.base import FinancialSnapshot
-
-        cached_df = pd.DataFrame([{
+        """All live sources fail, falls back to local cache"""
+        ds = _build_service(mock_settings, [])
+        ds.store.load_financial.return_value = pd.DataFrame([{
             "roe": 0.15, "pe_ttm": 20.0, "pb": 4.0, "report_date": "2025-06-30",
         }])
 
-        ds = _build_service(mock_settings, [])
-        mock_tushare = MagicMock()
-        mock_tushare.available = False
-        ds.store.load_financial.return_value = cached_df
-
-        with patch.object(type(ds), "tushare", new_callable=PropertyMock, return_value=mock_tushare):
-            result = ds.get_financial_snapshot("300750")
+        result = ds.get_financial_snapshot("300750")
 
         assert result is not None
         assert result.roe == 0.15
@@ -256,15 +246,11 @@ class TestDataServiceFallback:
         ds.store.load_financial.assert_called_once_with("300750", latest=True)
 
     def test_financial_snapshot_all_fail(self, mock_settings):
-        """Tushare 返回 None 且缓存也为空 -> 返回 None"""
+        """All sources return None and cache is empty -> returns None"""
         ds = _build_service(mock_settings, [])
-        mock_tushare = MagicMock()
-        mock_tushare.available = True
-        mock_tushare.get_financial_snapshot.return_value = None
         ds.store.load_financial.return_value = None
 
-        with patch.object(type(ds), "tushare", new_callable=PropertyMock, return_value=mock_tushare):
-            result = ds.get_financial_snapshot("300750")
+        result = ds.get_financial_snapshot("300750")
 
         assert result is None
 
@@ -292,8 +278,7 @@ class TestDataServiceFallback:
             "report_date": old_date,
         }])
 
-        with patch.object(type(ds), "tushare", new_callable=PropertyMock, return_value=None):
-            result = ds.get_financial_snapshot("300750", max_age_days=365)
+        result = ds.get_financial_snapshot("300750", max_age_days=365)
         assert result is None
 
     # -- 批量操作 -----------------------------------------------------------
@@ -315,17 +300,16 @@ class TestDataServiceFallback:
         """批量获取财务快照：部分成功只返回有效结果"""
         from quant_agent.data.sources.base import FinancialSnapshot
 
-        ds = _build_service(mock_settings, [])
         snap_300750 = FinancialSnapshot("300750", {"roe": 0.18})
-        mock_tushare = MagicMock()
-        mock_tushare.available = True
-        mock_tushare.get_financial_snapshot.side_effect = lambda code: (
+        mock_source = _make_source("test_source", financial_snapshot=None)
+        mock_source.get_financial_snapshot.side_effect = lambda code: (
             snap_300750 if code == "300750" else None
         )
+
+        ds = _build_service(mock_settings, [mock_source])
         ds.store.load_financial.return_value = None
 
-        with patch.object(type(ds), "tushare", new_callable=PropertyMock, return_value=mock_tushare):
-            results = ds.get_multi_financial(["300750", "601318"])
+        results = ds.get_multi_financial(["300750", "601318"])
 
         assert "300750" in results
         assert "601318" not in results
@@ -693,21 +677,16 @@ class TestDataServiceWithRealStore:
         src.get_price_data.assert_not_called()
 
     def test_financial_snapshot_persisted_to_store(self, mock_settings):
-        """Tushare 财务快照被持久化到真实存储"""
+        """Financial snapshot is persisted to real store"""
         from quant_agent.data.sources.base import FinancialSnapshot
 
         snapshot = FinancialSnapshot("300750", {
             "roe": 0.18, "pe_ttm": 25.0, "report_date": "2025-06-30",
         })
-        src = _make_source("source1")
+        src = _make_source("source1", financial_snapshot=snapshot)
         ds = _build_service(mock_settings, [src], use_real_store=True)
 
-        mock_tushare = MagicMock()
-        mock_tushare.available = True
-        mock_tushare.get_financial_snapshot.return_value = snapshot
-
-        with patch.object(type(ds), "tushare", new_callable=PropertyMock, return_value=mock_tushare):
-            result = ds.get_financial_snapshot("300750")
+        result = ds.get_financial_snapshot("300750")
 
         assert result is not None
         # 验证财务数据已持久化

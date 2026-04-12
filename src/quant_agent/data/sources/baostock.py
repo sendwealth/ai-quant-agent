@@ -3,17 +3,46 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timedelta
+from functools import wraps
 from typing import Optional
 
 import pandas as pd
 
+from ..rate_limiter import RateLimiter
 from .base import DataSource
 
 logger = logging.getLogger(__name__)
 
 # 复权类型映射: qfq=前复权(2), hfq=后复权(1), 其他=不复权(3)
 _ADJUST_MAP = {"qfq": "2", "hfq": "1"}
+
+# Only retry transient errors
+_RETRYABLE = (ConnectionError, TimeoutError, OSError)
+
+
+def _retry(max_retries: int = 3):
+    """Decorator: retry transient network/IO errors with exponential backoff."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_err = None
+            for attempt in range(1, max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except _RETRYABLE as e:
+                    last_err = e
+                    if attempt < max_retries:
+                        wait = 2 ** (attempt - 1)
+                        logger.warning(
+                            f"BaoStock {func.__name__} attempt {attempt} failed: {e}, "
+                            f"retry in {wait}s"
+                        )
+                        time.sleep(wait)
+            raise last_err  # type: ignore
+        return wrapper
+    return decorator
 
 
 class BaoStockSource(DataSource):
@@ -31,6 +60,7 @@ class BaoStockSource(DataSource):
         self._logged_in = False
         self._bs = None
         self._owns_login = False  # True when this instance called login()
+        self._rate_limiter = RateLimiter(max_calls=100, period=60.0)
 
     # ── Context manager ──────────────────────────────────────────────
 
@@ -103,6 +133,28 @@ class BaoStockSource(DataSource):
         self, stock_code: str, days: int = 250, adjust: str = "qfq"
     ) -> Optional[pd.DataFrame]:
         """获取历史日线行情"""
+        try:
+            self._rate_limiter.block_until_ready()
+            return self._get_price_data_impl(stock_code, days, adjust)
+        except _RETRYABLE as e:
+            # Re-login on connection errors, then retry once
+            logger.warning(f"BaoStock {stock_code} connection error, re-logging in: {e}")
+            self.logout()
+            try:
+                self._rate_limiter.block_until_ready()
+                return self._get_price_data_impl(stock_code, days, adjust)
+            except Exception as e2:
+                logger.warning(f"BaoStock {stock_code} failed after re-login: {e2}")
+                return None
+        except Exception as e:
+            logger.warning(f"BaoStock {stock_code} 失败: {e}")
+            return None
+
+    @_retry(max_retries=2)
+    def _get_price_data_impl(
+        self, stock_code: str, days: int = 250, adjust: str = "qfq"
+    ) -> Optional[pd.DataFrame]:
+        """Internal price data fetch with retry."""
         self._ensure_logged_in()
         end = datetime.now().strftime("%Y-%m-%d")
         start = (datetime.now() - timedelta(days=int(days * 1.5))).strftime(
@@ -112,37 +164,33 @@ class BaoStockSource(DataSource):
         adjust_flag = _ADJUST_MAP.get(adjust, "3")
         bs_code = self._to_bs_code(stock_code)
 
-        try:
-            rs = self._bs.query_history_k_data_plus(
-                bs_code,
-                "date,open,high,low,close,volume,amount,turn",
-                start_date=start,
-                end_date=end,
-                frequency="d",
-                adjustflag=adjust_flag,
-            )
-            rows = []
-            while rs.error_code == "0" and rs.next():
-                rows.append(rs.get_row_data())
-            if not rows:
-                return None
-
-            df = pd.DataFrame(
-                rows,
-                columns=[
-                    "date", "open", "high", "low", "close",
-                    "volume", "amount", "turnover",
-                ],
-            )
-            df = df[df["date"] != ""].reset_index(drop=True)
-            for c in ["open", "high", "low", "close", "volume", "amount"]:
-                df[c] = pd.to_numeric(df[c], errors="coerce")
-            df = df.dropna(subset=["close"])
-            df["amount"] = df["amount"].astype(float) / 1000
-            return df
-        except Exception as e:
-            logger.warning(f"BaoStock {stock_code} 失败: {e}")
+        rs = self._bs.query_history_k_data_plus(
+            bs_code,
+            "date,open,high,low,close,volume,amount,turn",
+            start_date=start,
+            end_date=end,
+            frequency="d",
+            adjustflag=adjust_flag,
+        )
+        rows = []
+        while rs.error_code == "0" and rs.next():
+            rows.append(rs.get_row_data())
+        if not rows:
             return None
+
+        df = pd.DataFrame(
+            rows,
+            columns=[
+                "date", "open", "high", "low", "close",
+                "volume", "amount", "turnover",
+            ],
+        )
+        df = df[df["date"] != ""].reset_index(drop=True)
+        for c in ["open", "high", "low", "close", "volume", "amount"]:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+        df = df.dropna(subset=["close"])
+        df["amount"] = df["amount"].astype(float) / 1000
+        return df
 
     def get_realtime_price(self, stock_code: str) -> Optional[float]:
         """BaoStock 不支持实时行情"""
@@ -154,25 +202,19 @@ class BaoStockSource(DataSource):
         """批量获取日线（一次登录）"""
         self._ensure_logged_in()
         results = {}
-        try:
-            for code in codes:
-                df = self.get_price_data(code, days, adjust)
-                if df is not None:
-                    results[code] = df
-        finally:
-            self.logout()
+        for code in codes:
+            df = self.get_price_data(code, days, adjust)
+            if df is not None:
+                results[code] = df
         return results
 
     def get_stock_list(self) -> pd.DataFrame:
         """获取 A 股股票列表"""
         self._ensure_logged_in()
-        try:
-            rs = self._bs.query_stock_basic()
-            rows = []
-            while rs.error_code == "0" and rs.next():
-                rows.append(rs.get_row_data())
-        finally:
-            self.logout()
+        rs = self._bs.query_stock_basic()
+        rows = []
+        while rs.error_code == "0" and rs.next():
+            rows.append(rs.get_row_data())
 
         if not rows:
             return pd.DataFrame()

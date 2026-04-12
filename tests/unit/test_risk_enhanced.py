@@ -1,5 +1,7 @@
 """风控体系增强测试 — T+1、日亏损熔断、组合级限制"""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from quant_agent.agents.base import AgentResult
@@ -140,3 +142,130 @@ class TestRiskAgentPortfolio:
         result = agent.analyze("300750", results)
         assert result.signal == "BUY"
         assert result.metrics["position"] > 0
+
+
+# ── RiskAgent.interpret_risk (LLM path) ──────────────────────────────────────
+
+
+class TestRiskAgentInterpretRisk:
+    """Test the LLM-based risk interpretation path."""
+
+    def _make_risk_result(self):
+        return AgentResult(
+            agent_name="risk",
+            stock_code="300750",
+            signal="BUY",
+            confidence=0.75,
+            success=True,
+            reasoning="共识: BUY (买2/卖0/观0), 平均信心度: 0.85",
+            metrics={
+                "position": 0.15,
+                "stop_loss": -0.08,
+                "take_profit_2": 0.20,
+            },
+        )
+
+    def _make_analysis_results(self):
+        return [
+            AgentResult(
+                agent_name="fundamental",
+                stock_code="300750",
+                signal="BUY",
+                confidence=0.80,
+                success=True,
+            ),
+            AgentResult(
+                agent_name="technical",
+                stock_code="300750",
+                signal="BUY",
+                confidence=0.90,
+                success=True,
+            ),
+        ]
+
+    def test_returns_none_without_llm(self):
+        """When _llm is None, interpret_risk returns None."""
+        agent = RiskAgent()
+        assert agent._llm is None
+        result = agent.interpret_risk("300750", self._make_risk_result(), [])
+        assert result is None
+
+    def test_calls_llm_invoke_with_correct_args(self):
+        """interpret_risk calls _llm.invoke with system + user prompts."""
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = "## 风险解读\n当前风险可控。"
+
+        agent = RiskAgent(llm_client=mock_llm)
+        risk_result = self._make_risk_result()
+        analysis_results = self._make_analysis_results()
+
+        output = agent.interpret_risk("300750", risk_result, analysis_results)
+
+        assert output == "## 风险解读\n当前风险可控。"
+        mock_llm.invoke.assert_called_once()
+
+        # Verify system and user prompts
+        call_args = mock_llm.invoke.call_args[0]
+        system_prompt = call_args[0]
+        user_prompt = call_args[1]
+
+        assert "风险管理专家" in system_prompt
+        assert "300750" in user_prompt
+        assert "BUY" in user_prompt
+        assert "75%" in user_prompt  # confidence
+
+    def test_user_prompt_contains_position_and_sl_tp(self):
+        """User prompt should include position %, stop loss, and take profit."""
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = "解读文本"
+
+        agent = RiskAgent(llm_client=mock_llm)
+        risk_result = self._make_risk_result()
+        analysis_results = self._make_analysis_results()
+
+        agent.interpret_risk("300750", risk_result, analysis_results)
+
+        user_prompt = mock_llm.invoke.call_args[0][1]
+        # position 0.15 → 15%, stop_loss -0.08 → -8%, take_profit_2 0.20 → 20%
+        assert "15" in user_prompt
+        assert "-8" in user_prompt
+        assert "20" in user_prompt
+
+    def test_user_prompt_contains_agent_signals(self):
+        """User prompt should include fundamental and technical signals."""
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = "解读"
+
+        agent = RiskAgent(llm_client=mock_llm)
+        risk_result = self._make_risk_result()
+        analysis_results = self._make_analysis_results()
+
+        agent.interpret_risk("300750", risk_result, analysis_results)
+
+        user_prompt = mock_llm.invoke.call_args[0][1]
+        assert "BUY" in user_prompt  # fund signal
+        assert "80%" in user_prompt  # fund confidence
+        assert "90%" in user_prompt  # tech confidence
+
+    def test_missing_agents_shows_na(self):
+        """When analysis_results lacks fundamental/technical, shows N/A."""
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = "解读"
+
+        agent = RiskAgent(llm_client=mock_llm)
+        risk_result = self._make_risk_result()
+
+        agent.interpret_risk("300750", risk_result, [])
+
+        user_prompt = mock_llm.invoke.call_args[0][1]
+        assert "N/A" in user_prompt
+
+    def test_llm_invoke_exception_returns_none(self):
+        """If _llm.invoke raises, interpret_risk should propagate (let caller handle)."""
+        mock_llm = MagicMock()
+        mock_llm.invoke.side_effect = RuntimeError("LLM down")
+
+        agent = RiskAgent(llm_client=mock_llm)
+
+        with pytest.raises(RuntimeError, match="LLM down"):
+            agent.interpret_risk("300750", self._make_risk_result(), [])

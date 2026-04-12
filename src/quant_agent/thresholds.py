@@ -44,7 +44,9 @@ class _Thresh:
             return _Thresh(v)
         if v is None:
             # Return a silent _Thresh so chained dot-access on missing keys
-            # doesn't crash (caller gets None at the leaf).
+            # doesn't crash (caller gets None at the leaf), but log a warning
+            # so YAML typos are visible in diagnostics.
+            logger.warning("Unknown threshold key accessed: %s", name)
             return _Thresh()
         return v
 
@@ -209,9 +211,65 @@ _FUNDAMENTAL_DEFAULTS: dict[str, Any] = {
     },
 }
 
+_SCREENER_DEFAULTS: dict[str, Any] = {
+    "prefilter": {
+        "min_avg_amount": 5000,        # 20日均成交额下限(千元)
+        "min_price": 5.0,
+        "max_price": 300.0,
+        "exclude_st": True,
+    },
+    "scoring": {
+        "technical": {
+            "ema_cross_score": 12,
+            "ema_price_above_score": 5,
+            "macd_positive_score": 8,
+            "macd_rising_score": 5,
+            "rsi_neutral_low": 35,
+            "rsi_neutral_high": 65,
+            "rsi_neutral_score": 5,
+            "rsi_oversold_score": 3,
+            "adx_strong_threshold": 25,
+            "adx_strong_score": 5,
+        },
+        "momentum": {
+            "return_20d_tiers": [[0.10, 15], [0.05, 10], [0.00, 5]],
+            "return_60d_tiers": [[0.20, 15], [0.10, 10], [0.00, 5]],
+            "volatility_ideal_low": 0.15,
+            "volatility_ideal_high": 0.40,
+            "volatility_ideal_score": 5,
+            "volatility_low_score": 2,
+        },
+        "liquidity": {
+            "avg_amount_tiers": [[50000, 15], [20000, 10], [10000, 7], [0, 4]],
+            "volume_ratio_ideal_low": 1.2,
+            "volume_ratio_ideal_high": 2.0,
+            "volume_ratio_ideal_score": 10,
+            "volume_ratio_high_score": 5,
+            "volume_ratio_moderate": 0.8,
+            "volume_ratio_moderate_score": 5,
+        },
+        "fundamental": {
+            "roe_excellent": 0.15,
+            "roe_score": 3,
+            "revenue_growth_good": 0.15,
+            "revenue_growth_score": 2,
+            "pe_cheap": 15,
+            "pe_cheap_score": 2,
+            "debt_high": 0.7,
+            "debt_high_penalty": -2,
+            "no_data_score": 0,
+        },
+    },
+    "output": {
+        "default_top_n": 20,
+        "min_score_to_pass": 30,
+    },
+}
+
 _FULL_DEFAULTS: dict[str, Any] = {
     "technical": _TECHNICAL_DEFAULTS,
     "fundamental": _FUNDAMENTAL_DEFAULTS,
+    "screener": _SCREENER_DEFAULTS,
 }
 
 

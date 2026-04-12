@@ -209,7 +209,10 @@ class BacktestEngine:
             result.win_rate = len(wins) / len(closed) if closed else 0.0
             result.avg_win = np.mean([t.pnl for t in wins]) if wins else 0.0
             result.avg_loss = np.mean([t.pnl for t in losses]) if losses else 0.0
-            result.profit_factor = abs(result.avg_win / result.avg_loss) if result.avg_loss != 0 else 0.0
+            result.profit_factor = (
+                sum(t.pnl for t in wins) / abs(sum(t.pnl for t in losses))
+                if losses else 0.0
+            )
 
             # Max consecutive losses
             max_consec = 0

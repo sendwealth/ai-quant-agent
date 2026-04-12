@@ -3,15 +3,48 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
+from contextlib import contextmanager
 from typing import Optional
 
 import pandas as pd
 
 from ..rate_limiter import RateLimiter
-from .base import DataSource
+from .base import DataSource, FinancialSnapshot
 
 logger = logging.getLogger(__name__)
+
+# Only retry transient network/IO errors, not data or auth errors.
+_RETRYABLE = (ConnectionError, TimeoutError, OSError)
+
+# Proxy keys to bypass for domestic API calls
+_PROXY_KEYS = ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "all_proxy")
+
+
+@contextmanager
+def _no_proxy():
+    """Temporarily disable system proxy for domestic API calls.
+
+    On macOS, Clash/Surge intercept DNS and route traffic through a local
+    proxy. This bypasses by removing env vars AND patching getproxies()
+    so requests won't use system proxy settings.
+    """
+    saved = {}
+    for key in _PROXY_KEYS:
+        if key in os.environ:
+            saved[key] = os.environ.pop(key)
+
+    # Patch urllib.getproxies to return empty dict (bypasses macOS system proxy)
+    import urllib.request
+    _orig_getproxies = urllib.request.getproxies
+    urllib.request.getproxies = lambda: {}
+
+    try:
+        yield
+    finally:
+        os.environ.update(saved)
+        urllib.request.getproxies = _orig_getproxies
 
 
 class AkshareSource(DataSource):
@@ -42,18 +75,23 @@ class AkshareSource(DataSource):
             return False
 
     def _retry_call(self, func, *args, **kwargs):
-        """带退避的重试（含限速）"""
+        """带退避的重试（含限速）— 仅重试瞬态网络错误"""
         self._rate_limiter.block_until_ready()
         last_err = None
         for attempt in range(1, self.max_retries + 1):
             try:
-                return func(*args, **kwargs)
-            except Exception as e:
+                with _no_proxy():
+                    return func(*args, **kwargs)
+            except _RETRYABLE as e:
                 last_err = e
                 if attempt < self.max_retries:
                     wait = 2 ** (attempt - 1)
-                    logger.warning(f"AkShare {func.__name__} 第{attempt}次失败: {e}, {wait:.0f}s后重试")
+                    logger.warning(f"AkShare {func.__name__} 第{attempt}次网络错误: {e}, {wait:.0f}s后重试")
                     time.sleep(wait)
+            except Exception as e:
+                # Non-retryable (auth, data format, rate-limit errors): fail fast
+                logger.warning(f"AkShare {func.__name__} 非瞬态错误，不重试: {e}")
+                raise
         raise last_err  # type: ignore
 
     def get_price_data(
@@ -106,7 +144,8 @@ class AkshareSource(DataSource):
             self._rate_limiter.block_until_ready()
             market = "sz" if stock_code.startswith(("0", "3")) else "sh"
             url = f"https://web.sqt.gtimg.cn/q={market}{stock_code}"
-            resp = requests.get(url, timeout=self.timeout)
+            with _no_proxy():
+                resp = requests.get(url, timeout=self.timeout)
             if "~" in resp.text:
                 parts = resp.text.split("~")
                 if len(parts) > 3:
@@ -131,3 +170,102 @@ class AkshareSource(DataSource):
         except Exception as e:
             logger.warning(f"AkShare 财务指标获取失败: {e}")
         return None
+
+    def get_news(self, stock_code: str, count: int = 20) -> Optional[pd.DataFrame]:
+        """获取个股新闻（东方财富源）
+
+        Args:
+            stock_code: A 股代码 (6 位数字)
+            count: 获取新闻条数 (默认 20)
+
+        Returns:
+            DataFrame with columns: title, content, date, source
+            or None on failure
+        """
+        try:
+            import akshare as ak
+            df = self._retry_call(
+                ak.stock_news_em,
+                symbol=stock_code,
+            )
+            if df is None or df.empty:
+                return None
+
+            # Standardize column names from akshare output
+            column_map = {
+                "新闻标题": "title",
+                "新闻内容": "content",
+                "发布时间": "date",
+                "文章来源": "source",
+                "新闻链接": "url",
+            }
+            df = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
+            df = df.head(count)
+
+            logger.info(f"✅ AkShare: 获取 {stock_code} 新闻 ({len(df)}条)")
+            return df
+        except Exception as e:
+            logger.warning(f"AkShare 新闻获取失败: {e}")
+            return None
+
+    def get_financial_snapshot(
+        self, stock_code: str
+    ) -> Optional[FinancialSnapshot]:
+        """获取财务快照 — 从 AkShare 财务指标接口提取.
+
+        Uses ``stock_financial_analysis_indicator`` to get quarterly metrics,
+        maps Chinese column names to ``FinancialSnapshot`` fields.
+        """
+        try:
+            df = self.get_financial_indicators(stock_code)
+            if df is None or df.empty:
+                return None
+
+            latest = df.iloc[-1]
+
+            # Chinese → English column mapping
+            col_map = {
+                "净资产收益率": "roe",
+                "销售毛利率": "gross_margin",
+                "销售净利率": "net_margin",
+                "资产负债率": "debt_ratio",
+                "流动比率": "current_ratio",
+                "营业收入同比增长率": "revenue_growth",
+                "净利润同比增长率": "profit_growth",
+            }
+
+            data: dict = {}
+            for cn_name, en_key in col_map.items():
+                if cn_name in latest.index:
+                    try:
+                        val = float(latest[cn_name])
+                        # AkShare returns percentages as decimals (e.g. 0.22 for 22%)
+                        # but sometimes as raw numbers. Normalize: if > 1, divide by 100.
+                        if en_key in ("roe", "gross_margin", "net_margin", "debt_ratio",
+                                      "revenue_growth", "profit_growth") and abs(val) > 1:
+                            val = val / 100.0
+                        data[en_key] = val
+                    except (ValueError, TypeError):
+                        pass
+
+            # Report date
+            for date_col in ["日期", "报告期"]:
+                if date_col in latest.index:
+                    data["report_date"] = str(latest[date_col])
+                    break
+
+            # Current price
+            price = self.get_realtime_price(stock_code)
+            if price is not None:
+                data["price"] = price
+
+            snapshot = FinancialSnapshot(stock_code, data)
+            logger.info(
+                f"AkShare: financial snapshot for {stock_code}, "
+                f"{len([v for v in data.values() if v is not None])} fields"
+            )
+            return snapshot
+
+        except Exception as e:
+            logger.warning(f"AkShare financial snapshot failed for {stock_code}: {e}")
+            return None

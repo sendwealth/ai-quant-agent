@@ -125,6 +125,7 @@ def make_mock_settings(tmp_path):
     settings.tushare_token = None
     settings.akshare_timeout = 5
     settings.fetch_max_workers = 1
+    settings.initial_capital = 100000.0
     settings.max_position_pct = 0.20
     settings.max_portfolio_risk = 0.80
     settings.max_daily_loss_pct = -0.03
@@ -600,3 +601,74 @@ class TestAnalysisReportStructure:
 
         for key in ("rsi", "macd", "macd_status", "ema_trend", "atr", "adx", "current_price"):
             assert key in metrics, f"Missing technical metric: {key}"
+
+
+# ===========================================================================
+# Test 7 -- Concurrent analyze_batch safety (P0-1 regression)
+# ===========================================================================
+
+
+class TestConcurrentAnalysis:
+    """P0-1 regression: concurrent analyze() must not corrupt shared state.
+
+    The _execution_lock serializes the risk+execution phase so that
+    concurrent threads don't race on ExecutionAgent._portfolio state.
+    """
+
+    def test_concurrent_analyze_no_state_corruption(self, tmp_path):
+        """Multiple threads calling analyze() simultaneously must not corrupt
+        portfolio state (cash, positions, orders)."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        settings = make_mock_settings(tmp_path)
+        orch = build_orchestrator_with_mocks(
+            settings,
+            price_data=make_uptrend_price_df(),
+            financial_snapshot=make_strong_financial_snapshot(),
+        )
+
+        codes = ["300750", "601318", "000001", "002475", "600276"]
+        results: dict[str, AnalysisReport] = {}
+        errors: list[str] = []
+
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futures = {pool.submit(orch.analyze, code): code for code in codes}
+            for future in as_completed(futures):
+                code = futures[future]
+                try:
+                    report = future.result()
+                    results[code] = report
+                except Exception as e:
+                    errors.append(f"{code}: {e}")
+
+        # All analyses must complete without errors
+        assert len(errors) == 0, f"Concurrent errors: {errors}"
+        assert len(results) == len(codes)
+
+        # Each result must be a valid AnalysisReport
+        for code, report in results.items():
+            assert isinstance(report, AnalysisReport)
+            assert report.risk_result is not None
+
+        # Portfolio must be internally consistent after concurrent writes
+        total_equity = orch.execution.total_equity
+        cash = orch.execution.cash
+        pos_value = orch.execution.position_value
+        assert abs(total_equity - (cash + pos_value)) < 0.01
+
+    def test_concurrent_batch_preserves_order(self, tmp_path):
+        """analyze_batch returns results in original order even when concurrent."""
+        settings = make_mock_settings(tmp_path)
+        orch = build_orchestrator_with_mocks(
+            settings,
+            price_data=make_uptrend_price_df(),
+            financial_snapshot=make_strong_financial_snapshot(),
+        )
+
+        codes = ["300750", "601318", "000001"]
+        reports = orch.analyze_batch(codes)
+
+        # Results should be in the same order as input (non-failed)
+        assert len(reports) <= len(codes)
+        returned_codes = [r.stock_code for r in reports]
+        assert returned_codes == codes

@@ -432,3 +432,49 @@ class TestKnownAnswerDeterministic:
         # Verify that exactly 600 shares were bought (board lot rounding)
         buy_trade = result.trades[0]
         assert buy_trade.shares == 600
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for bug fixes
+# ---------------------------------------------------------------------------
+
+
+class TestProfitFactorRegression:
+    """P1-1 regression: profit_factor must use sum(wins)/abs(sum(losses)),
+    NOT avg_win/avg_loss.
+
+    Construct a sequence with 2 wins (100 and 50) and 1 loss (-80):
+        correct PF = (100+50) / 80 = 1.875
+        wrong  PF = avg(100,50) / avg(80) = 75/80 = 0.9375
+    """
+
+    def test_profit_factor_uses_sum_not_avg(self):
+        """Two wins + one loss: verify profit_factor = sum/abs(sum)."""
+        prices = [100, 100, 110, 100, 120, 100, 95, 100, 105, 100]
+        price_data = pd.DataFrame({
+            "date": [f"202501{d:02d}" for d in range(1, 11)],
+            "close": [float(p) for p in prices],
+        })
+        # Three round trips: buy@100→sell@110 (win), buy@100→sell@120 (win), buy@100→sell@95 (loss)
+        signals = pd.Series([0, 1, -1, 1, -1, 1, -1, 0, 0, 0])
+
+        engine = BacktestEngine(
+            initial_capital=100000,
+            slippage=SlippageModel(basis_points=0.0),
+        )
+        result = engine.run(price_data, signals)
+
+        # Verify formula: profit_factor = sum(wins) / abs(sum(losses))
+        closed = [t for t in result.trades if t.status == "closed" and t.direction == "sell"]
+        wins = [t for t in closed if t.pnl > 0]
+        losses = [t for t in closed if t.pnl <= 0]
+
+        if wins and losses:
+            expected_pf = sum(t.pnl for t in wins) / abs(sum(t.pnl for t in losses))
+            assert abs(result.profit_factor - expected_pf) < 0.001
+
+        # Sanity: with 2 wins and 1 loss, PF should be > 1
+        assert result.total_trades == 3
+        assert result.win_trades == 2
+        assert result.lose_trades == 1
+        assert result.profit_factor > 1.0

@@ -22,6 +22,7 @@ dependencies = [
     "langchain>=0.3.0",
     "langchain-openai>=1.0.0",
     "langchain-community>=0.3.0",
+    "efinance>=0.5.8",
 ]
 
 [project.optional-dependencies]

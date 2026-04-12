@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -72,6 +73,11 @@ class Orchestrator:
         self.metrics = MetricsCollector()
         self.data = DataService(self.settings)
 
+        # Execution lock: serializes the risk+execution phase in analyze()
+        # so that concurrent calls via analyze_batch don't corrupt shared
+        # portfolio state (positions, cash, orders) in ExecutionAgent.
+        self._execution_lock = threading.Lock()
+
         # 健康检查 — verify actual connectivity, not just object existence
         self.health = HealthChecker()
         self.health.register("data_service", self._check_data_service)
@@ -95,7 +101,7 @@ class Orchestrator:
         self.planner = PlannerAgent(llm_client=self.llm)
         self.risk = RiskAgent(settings=self.settings, llm_client=self.llm)
         self.execution = ExecutionAgent(
-            initial_capital=100000,
+            initial_capital=self.settings.initial_capital,
             settings=self.settings,
             audit_logger=self.audit_logger,
         )
@@ -108,12 +114,26 @@ class Orchestrator:
         # 邮件通知
         self.notifier = EmailNotifier(self.settings)
 
+        # 选股引擎 (lazy — only instantiated when needed)
+        self._screener = None
+
     def _check_data_service(self) -> bool:
         """Real health check: verify at least one data source is usable."""
         try:
             return bool(self.data and self.data._sources)
         except Exception:
             return False
+
+    @property
+    def screener(self):
+        """Lazy-loaded ScreeningEngine."""
+        if self._screener is None:
+            from .screener import ScreeningEngine
+            self._screener = ScreeningEngine(
+                data_service=self.data,
+                settings=self.settings,
+            )
+        return self._screener
 
     @staticmethod
     def _run_agent(name: str, agent, stock_code: str) -> AgentResult:
@@ -193,94 +213,97 @@ class Orchestrator:
                 self.metrics.counter("analysis.runs", 1, {"agent": name, "success": str(result.success)})
 
         # c. 风控汇总 — pass portfolio context for portfolio-level risk controls
+        #    The execution phase (risk → stop-check → execute → summary) must be
+        #    serialized because all threads share the same ExecutionAgent portfolio.
         logger.info("-" * 40)
 
-        # Gather current portfolio state for risk agent
-        current_positions = {
-            code: pos.shares * pos.current_price
-            for code, pos in self.execution.positions.items()
-        }
-        current_equity = self.execution.total_equity
-        current_date = datetime.now().strftime("%Y-%m-%d")
+        with self._execution_lock:
+            # Gather current portfolio state for risk agent
+            current_positions = {
+                code: pos.shares * pos.current_price
+                for code, pos in self.execution.positions.items()
+            }
+            current_equity = self.execution.total_equity
+            current_date = datetime.now().strftime("%Y-%m-%d")
 
-        risk_result = self.risk.analyze(
-            stock_code, analysis_results,
-            current_positions=current_positions,
-            current_equity=current_equity,
-            current_date=current_date,
-        )
-        report.risk_result = risk_result
-        logger.info("  Risk: %s (position %.1f%%)", risk_result.signal, risk_result.metrics.get("position", 0))
-        logger.info("     %s", risk_result.reasoning)
+            risk_result = self.risk.analyze(
+                stock_code, analysis_results,
+                current_positions=current_positions,
+                current_equity=current_equity,
+                current_date=current_date,
+            )
+            report.risk_result = risk_result
+            logger.info("  Risk: %s (position %.1f%%)", risk_result.signal, risk_result.metrics.get("position", 0))
+            logger.info("     %s", risk_result.reasoning)
 
-        # c2. LLM 风险解读 (可选)
-        if self.llm:
-            try:
-                report.risk_interpretation = self.risk.interpret_risk(
-                    stock_code, risk_result, analysis_results
-                )
-                if report.risk_interpretation:
-                    logger.info("  Risk Interpretation: %s", report.risk_interpretation[:100])
-            except LLMError as e:
-                logger.warning("LLM 风险解读失败: %s", e)
+            # c2. LLM 风险解读 (可选)
+            if self.llm:
+                try:
+                    report.risk_interpretation = self.risk.interpret_risk(
+                        stock_code, risk_result, analysis_results
+                    )
+                    if report.risk_interpretation:
+                        logger.info("  Risk Interpretation: %s", report.risk_interpretation[:100])
+                except LLMError as e:
+                    logger.warning("LLM 风险解读失败: %s", e)
 
-        # d. Check stop-loss/take-profit on existing positions BEFORE new trades
-        for code in list(self.execution.positions.keys()):
-            pos = self.execution.positions[code]
-            stop_order = self.execution.check_stop_conditions(code, pos.current_price)
-            if stop_order:
-                logger.warning("  Stop triggered for %s: %s %d @ %.2f",
-                               code, stop_order.direction, stop_order.shares, stop_order.filled_price)
-                self.risk.t1_tracker.clear(code)
+            # d. Check stop-loss/take-profit on existing positions BEFORE new trades
+            for code in list(self.execution.positions.keys()):
+                pos = self.execution.positions[code]
+                stop_order = self.execution.check_stop_conditions(code, pos.current_price)
+                if stop_order:
+                    logger.warning("  Stop triggered for %s: %s %d @ %.2f",
+                                   code, stop_order.direction, stop_order.shares, stop_order.filled_price)
+                    self.risk.t1_tracker.clear(code)
 
-        # e. 执行 (仅在 risk 信号为 BUY/SELL 时)
-        position_pct = risk_result.metrics.get("position", 0.0)
-        current_price = 0.0
-        for r in analysis_results:
-            if current_price > 0:
-                break
-            for key in ("current_price", "price"):
-                val = r.metrics.get(key)
-                if val is not None and val > 0:
-                    current_price = float(val)
+            # e. 执行 (仅在 risk 信号为 BUY/SELL 时)
+            position_pct = risk_result.metrics.get("position", 0.0)
+            current_price = 0.0
+            for r in analysis_results:
+                if current_price > 0:
                     break
+                for key in ("current_price", "price"):
+                    val = r.metrics.get(key)
+                    if val is not None and val > 0:
+                        current_price = float(val)
+                        break
 
-        all_results = analysis_results + [risk_result]
+            all_results = analysis_results + [risk_result]
 
-        if risk_result.signal == "BUY" and position_pct > 0 and current_price > 0:
-            order = self.execution.execute_signal(
-                stock_code, "BUY",
-                position_pct=position_pct,
-                current_price=current_price,
-                stop_loss_pct=risk_result.metrics.get("stop_loss", -0.08),
-                take_profit_pct=risk_result.metrics.get("take_profit_2", 0.20),
-                agent_results=all_results,
-            )
-            if order and order.status == "filled":
-                logger.info("  BUY executed: %s %d shares @ %.2f", stock_code, order.shares, order.filled_price)
-                # Record buy for T+1 enforcement
-                self.risk.t1_tracker.record_buy(stock_code, current_date)
-        elif risk_result.signal == "SELL":
-            order = self.execution.execute_signal(
-                stock_code, "SELL",
-                current_price=current_price,
-                agent_results=all_results,
-            )
-            if order and order.status == "filled":
-                logger.info("  SELL executed: %s %d shares @ %.2f", stock_code, order.shares, order.filled_price)
-                self.risk.t1_tracker.clear(stock_code)
-        else:
-            self.execution.execute_signal(
-                stock_code, risk_result.signal,
-                position_pct=position_pct,
-                current_price=current_price,
-                agent_results=all_results,
-            )
-            logger.info("  No trade (signal=%s)", risk_result.signal)
+            if risk_result.signal == "BUY" and position_pct > 0 and current_price > 0:
+                order = self.execution.execute_signal(
+                    stock_code, "BUY",
+                    position_pct=position_pct,
+                    current_price=current_price,
+                    stop_loss_pct=risk_result.metrics.get("stop_loss", -0.08),
+                    take_profit_pct=risk_result.metrics.get("take_profit_2", 0.20),
+                    agent_results=all_results,
+                )
+                if order and order.status == "filled":
+                    logger.info("  BUY executed: %s %d shares @ %.2f", stock_code, order.shares, order.filled_price)
+                    # Record buy for T+1 enforcement
+                    self.risk.t1_tracker.record_buy(stock_code, current_date)
+            elif risk_result.signal == "SELL":
+                order = self.execution.execute_signal(
+                    stock_code, "SELL",
+                    current_price=current_price,
+                    agent_results=all_results,
+                )
+                if order and order.status == "filled":
+                    logger.info("  SELL executed: %s %d shares @ %.2f", stock_code, order.shares, order.filled_price)
+                    self.risk.t1_tracker.clear(stock_code)
+            else:
+                self.execution.execute_signal(
+                    stock_code, risk_result.signal,
+                    position_pct=position_pct,
+                    current_price=current_price,
+                    agent_results=all_results,
+                )
+                logger.info("  No trade (signal=%s)", risk_result.signal)
 
-        # e. 组合状态
-        summary = self.execution.get_summary()
-        report.summary = summary
+            # e. 组合状态
+            summary = self.execution.get_summary()
+            report.summary = summary
         logger.info("")
         logger.info("Portfolio:")
         logger.info("  Total equity: %.2f", summary["total_equity"])
@@ -372,3 +395,45 @@ class Orchestrator:
             self.notifier.send_daily_report(ordered, self.execution.get_summary())
 
         return ordered
+
+    def screen_and_analyze(
+        self,
+        use_full_market: bool = False,
+        top_n: int = 10,
+        include_fundamentals: bool = False,
+        analyze_days: int = 120,
+    ) -> tuple:
+        """选股 + 深度分析一体化
+
+        Two-phase pipeline:
+          Phase 1: ScreeningEngine.screen() → top N stock codes
+          Phase 2: Orchestrator.analyze_batch(top codes) → AnalysisReports
+
+        Args:
+            use_full_market: Scan all A-shares (slow) vs hardcoded pool
+            top_n: How many top-scored stocks to deep-analyze
+            include_fundamentals: Include fundamental scoring in screening
+            analyze_days: Days of history for deep analysis
+
+        Returns:
+            (ScreeningResult, list[AnalysisReport])
+        """
+        # Phase 1: Screen
+        screen_result = self.screener.screen(
+            use_full_market=use_full_market,
+            top_n=top_n,
+            include_fundamentals=include_fundamentals,
+            days=analyze_days,
+        )
+
+        if not screen_result.top_stocks:
+            logger.warning("选股无结果")
+            return screen_result, []
+
+        codes = [s.stock_code for s in screen_result.top_stocks]
+        logger.info("选股 Top %d: %s", len(codes), ", ".join(codes))
+
+        # Phase 2: Deep analyze
+        reports = self.analyze_batch(codes, days=analyze_days)
+
+        return screen_result, reports

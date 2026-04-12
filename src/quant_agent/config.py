@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     llm_max_retries: int = 2
 
     # ── 风控 ──
+    initial_capital: float = 100000.0
     max_position_pct: float = 0.20
     max_portfolio_risk: float = 0.80
     default_stop_loss: float = -0.08
@@ -54,6 +55,10 @@ class Settings(BaseSettings):
 
     # ── 并发 ──
     fetch_max_workers: int = 5
+
+    # ── 离线 & 预下载 ──
+    offline_mode: bool = False
+    preload_stocks: str = "300750,002475,601318,600276,000858,600519"
 
     # ── 日志 ──
     log_level: str = "INFO"
@@ -108,6 +113,13 @@ class Settings(BaseSettings):
     def _validate_take_profit(cls, v: float) -> float:
         if v <= 0:
             raise ValueError(f"take_profit must be positive, got {v}")
+        return v
+
+    @field_validator("initial_capital")
+    @classmethod
+    def _validate_initial_capital(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError(f"initial_capital must be positive, got {v}")
         return v
 
 

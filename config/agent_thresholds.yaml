@@ -125,3 +125,70 @@ fundamental:
     weak_score: 3.0             # avg score >= this → HOLD (weak)
     weak_confidence: 0.50
     poor_sell_confidence: 0.65  # avg score below weak_score → SELL
+
+# Screener thresholds — stock screening scoring parameters
+screener:
+  # Pre-screening filters (run before data fetching)
+  prefilter:
+    min_avg_amount: 5000         # 20日均成交额下限(千元)
+    min_price: 5.0               # 最低价格
+    max_price: 300.0             # 最高价格
+    exclude_st: true             # 排除ST
+
+  # Multi-dimension scoring weights
+  scoring:
+    technical:
+      ema_cross_score: 12        # EMA20>EMA60 得分
+      ema_price_above_score: 5   # 价格>EMA20 额外得分
+      macd_positive_score: 8     # MACD柱>0 得分
+      macd_rising_score: 5       # MACD柱上升 得分
+      rsi_neutral_low: 35        # RSI中性区间下限
+      rsi_neutral_high: 65       # RSI中性区间上限
+      rsi_neutral_score: 5       # RSI在中性区间 得分
+      rsi_oversold_score: 3      # RSI超卖 得分
+      adx_strong_threshold: 25   # ADX强趋势阈值
+      adx_strong_score: 5        # ADX>25 得分
+
+    momentum:
+      # [threshold, score] tiers — first match wins, descending order
+      return_20d_tiers:          # 20日收益率分档
+        - [0.10, 15]             # >10% → 15分
+        - [0.05, 10]             # >5% → 10分
+        - [0.00, 5]              # >0% → 5分
+      return_60d_tiers:          # 60日收益率分档
+        - [0.20, 15]             # >20% → 15分
+        - [0.10, 10]             # >10% → 10分
+        - [0.00, 5]              # >0% → 5分
+      volatility_ideal_low: 0.15 # 理想波动率下限
+      volatility_ideal_high: 0.40 # 理想波动率上限
+      volatility_ideal_score: 5  # 波动率在理想区间 得分
+      volatility_low_score: 2    # 波动率过低 得分
+
+    liquidity:
+      # [threshold, score] tiers — first match wins, descending order
+      avg_amount_tiers:          # 20日均成交额分档(千元)
+        - [50000, 15]            # >5000万 → 15分
+        - [20000, 10]            # >2000万 → 10分
+        - [10000, 7]             # >1000万 → 7分
+        - [0, 4]                 # 其他 → 4分
+      volume_ratio_ideal_low: 1.2  # 理想量比下限
+      volume_ratio_ideal_high: 2.0 # 理想量比上限
+      volume_ratio_ideal_score: 10 # 量比在理想区间 得分
+      volume_ratio_high_score: 5   # 量比过高 得分
+      volume_ratio_moderate: 0.8   # 量比适中阈值
+      volume_ratio_moderate_score: 5 # 量比适中 得分
+
+    fundamental:
+      roe_excellent: 0.15        # ROE优秀阈值
+      roe_score: 3               # ROE优秀 得分
+      revenue_growth_good: 0.15  # 营收增长良好阈值
+      revenue_growth_score: 2    # 营收增长良好 得分
+      pe_cheap: 15               # PE低估值阈值
+      pe_cheap_score: 2          # PE低估值 得分
+      debt_high: 0.7             # 负债率过高阈值
+      debt_high_penalty: -2      # 负债率过高 扣分
+      no_data_score: 0           # 无财务数据 得分
+
+  output:
+    default_top_n: 20            # 默认返回前N只
+    min_score_to_pass: 30        # 最低入选分数

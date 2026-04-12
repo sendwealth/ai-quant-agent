@@ -53,3 +53,31 @@ class TestConfigValidation:
         assert s.max_position_pct == 1.0
         assert s.default_stop_loss == -0.99
         assert s.commission_rate == 0.0
+
+
+class TestInitialCapitalValidation:
+    """Boundary validation for initial_capital."""
+
+    def test_valid_default_capital(self):
+        s = _make_settings()
+        assert s.initial_capital == 100000.0
+
+    def test_valid_small_capital(self):
+        s = _make_settings(initial_capital=1.0)
+        assert s.initial_capital == 1.0
+
+    def test_valid_large_capital(self):
+        s = _make_settings(initial_capital=1e9)
+        assert s.initial_capital == 1e9
+
+    def test_zero_capital_rejected(self):
+        with pytest.raises(ValidationError, match="initial_capital"):
+            _make_settings(initial_capital=0)
+
+    def test_negative_capital_rejected(self):
+        with pytest.raises(ValidationError, match="initial_capital"):
+            _make_settings(initial_capital=-100000)
+
+    def test_tiny_positive_capital_accepted(self):
+        s = _make_settings(initial_capital=0.01)
+        assert s.initial_capital == 0.01

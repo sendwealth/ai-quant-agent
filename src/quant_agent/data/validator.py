@@ -124,3 +124,58 @@ def clean_price_data(
             logger.info(f"移除 {removed} 个异常值")
 
     return result.reset_index(drop=True)
+
+
+def repair_price_data(
+    df: pd.DataFrame,
+    max_null_pct: float = 0.05,
+) -> Optional[pd.DataFrame]:
+    """Attempt to repair data quality issues in price data.
+
+    Repair strategies:
+    1. Forward-fill then back-fill NaN values in price columns (OHLC)
+    2. Linear interpolation for volume NaN values
+    3. Drop rows where close is still NaN after repair
+    4. Drop rows with non-positive close prices
+
+    Returns None if the repaired DataFrame is empty.
+    """
+    if df is None or df.empty:
+        return None
+
+    result = df.copy()
+
+    # 1. Forward-fill + back-fill price columns
+    price_cols = [c for c in ["open", "high", "low", "close"] if c in result.columns]
+    if price_cols:
+        result[price_cols] = result[price_cols].ffill().bfill()
+
+    # 2. Interpolate volume (linear)
+    if "volume" in result.columns:
+        result["volume"] = result["volume"].interpolate(method="linear")
+        # Fill remaining NaN with 0 (suspended trading)
+        result["volume"] = result["volume"].fillna(0)
+
+    # 3. Drop rows where close is still NaN
+    if "close" in result.columns:
+        result = result.dropna(subset=["close"])
+
+    # 4. Drop rows with non-positive close prices
+    if "close" in result.columns:
+        result = result[result["close"] > 0]
+
+    result = result.reset_index(drop=True)
+
+    if result.empty:
+        return None
+
+    # Log repair stats
+    orig_nulls = df.isna().sum().sum()
+    new_nulls = result.isna().sum().sum()
+    if orig_nulls > 0:
+        logger.info(
+            f"Data repair: {orig_nulls} nulls → {new_nulls}, "
+            f"rows {len(df)} → {len(result)}"
+        )
+
+    return result
