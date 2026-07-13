@@ -13,7 +13,7 @@ from .audit import AuditLogger
 from .config import Settings, get_settings
 from .data.service import DataService
 from .data.validators import validate_stock_code
-from .llm.client import LLMClient, LLMError
+from .llm.client import LLMClient, LLMError, get_llm_client_soft
 from .llm.report import LLMReportGenerator
 from .agents.base import AgentResult
 from .agents.fundamental import FundamentalAgent
@@ -81,18 +81,18 @@ class Orchestrator:
         # 健康检查 — verify actual connectivity, not just object existence
         self.health = HealthChecker()
         self.health.register("data_service", self._check_data_service)
-        self.health.register("llm", lambda: self.llm is not None)
+        self.health.register("llm", lambda: self.llm is not None and self.llm.enabled)
 
         # 审计日志
         audit_dir = f"{self.settings.data_dir}/audit"
         self.audit_logger = AuditLogger(log_dir=audit_dir)
 
-        # LLM 客户端 (可选 — 无 API key 时跳过 LLM 功能)
+        # LLM 客户端 (软降级 — 无 API key 时进入离线规则增强模式，功能不中断)
         self.llm: Optional[LLMClient] = None
         try:
-            self.llm = LLMClient(self.settings)
-        except LLMError:
-            logger.info("LLM 未配置 (无 API key)，跳过 LLM 增强功能")
+            self.llm = get_llm_client_soft()
+        except LLMError as e:
+            logger.info("LLM 初始化失败，进入离线模式: %s", e)
 
         # 初始化 Agent 团队
         self.fundamental = FundamentalAgent(data_service=self.data)
@@ -237,7 +237,7 @@ class Orchestrator:
             logger.info("     %s", risk_result.reasoning)
 
             # c2. LLM 风险解读 (可选)
-            if self.llm:
+            if self.llm and self.llm.enabled:
                 try:
                     report.risk_interpretation = self.risk.interpret_risk(
                         stock_code, risk_result, analysis_results
@@ -312,7 +312,7 @@ class Orchestrator:
         logger.info("  Return: %.2f%%", summary["total_return"] * 100)
 
         # f. LLM 综合报告 (可选)
-        if self.report_gen:
+        if self.report_gen and self.llm and self.llm.enabled:
             try:
                 report.llm_analysis = self.report_gen.generate(report)
                 logger.info("  LLM Report: generated (%d chars)", len(report.llm_analysis))
@@ -344,8 +344,8 @@ class Orchestrator:
         Returns:
             AnalysisReport
         """
-        if not self.llm:
-            raise LLMError("LLM 未配置，无法解析自然语言指令")
+        if not self.llm or not self.llm.enabled:
+            raise LLMError("LLM 未配置，无法解析自然语言指令（请配置 API key 或本地模型）")
 
         plan: ExecutionPlan = self.planner.parse_intent(user_input)
         if not plan.stock_code:

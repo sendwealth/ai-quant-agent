@@ -22,6 +22,7 @@ htmlcov/
 # Data cache
 data/cache/
 data/parquet/
+data/reports/
 
 # OS
 .DS_Store

@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     # ── 存储 ──
     data_dir: str = "data/cache"
     parquet_dir: str = "data/parquet"
+    # 内置样例数据目录（开箱即用的离线兜底，相对包内路径）
+    sample_data_dir: str = "data/samples"
 
     # ── LLM ──
     openai_api_key: Optional[str] = None
@@ -36,6 +38,9 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
     zhipu_api_key: Optional[str] = None
     zhipu_model: str = "glm-4"
+    # 本地 / 自建 OpenAI 兼容服务（Ollama / LM Studio / vLLM 等）
+    llm_base_url: Optional[str] = None
+    llm_local_model: Optional[str] = None
     llm_timeout: int = 30
     llm_max_retries: int = 2
 

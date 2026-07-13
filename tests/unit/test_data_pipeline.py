@@ -234,8 +234,9 @@ class TestDataServiceFallback:
     def test_financial_snapshot_tushare_fails_fallback_to_cache(self, mock_settings):
         """All live sources fail, falls back to local cache"""
         ds = _build_service(mock_settings, [])
+        recent_date = (pd.Timestamp.now() - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
         ds.store.load_financial.return_value = pd.DataFrame([{
-            "roe": 0.15, "pe_ttm": 20.0, "pb": 4.0, "report_date": "2025-06-30",
+            "roe": 0.15, "pe_ttm": 20.0, "pb": 4.0, "report_date": recent_date,
         }])
 
         result = ds.get_financial_snapshot("300750")

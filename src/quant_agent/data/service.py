@@ -13,6 +13,7 @@ from .sources.base import DataSource, FinancialSnapshot
 from .sources.tushare import TushareSource
 from .sources.akshare import AkshareSource
 from .sources.baostock import BaoStockSource
+from .sources.sample import SamplePriceSource
 from .normalizer import normalize_price_data
 from .validator import validate_price_data, clean_price_data, repair_price_data
 from .validators import validate_stock_code
@@ -72,6 +73,10 @@ class DataService:
         except Exception as e:
             logger.warning(f"BaoStock init failed: {e}")
 
+        # 样例兜底源（离线 / 全源失败时使用，不参与健康检查的"真实源"判定）
+        self._sample = SamplePriceSource(self.settings)
+        logger.info("Sample fallback data source ready (offline/demo)")
+
     @property
     def tushare(self) -> Optional[TushareSource]:
         return self._tushare if hasattr(self, "_tushare") else None
@@ -107,13 +112,20 @@ class DataService:
         """
         stock_code = validate_stock_code(stock_code)
 
-        # 离线模式：只读缓存
+        # 离线模式：只读缓存，无缓存则尝试样例兜底（内置样例/合成演示）
         if getattr(self.settings, "offline_mode", False):
             df = self.store.load_price(stock_code)
             if df is not None:
                 logger.info(f"Offline mode: using cached data for {stock_code}")
                 return normalize_price_data(df)
-            logger.warning(f"Offline mode: no cached data for {stock_code}")
+            try:
+                demo = self._sample.get_price_data(stock_code, days)
+                if demo is not None and not demo.empty:
+                    logger.info(f"Offline mode: using sample fallback for {stock_code}")
+                    return normalize_price_data(demo)
+            except Exception as e:
+                logger.warning(f"Offline sample fallback failed: {e}")
+            logger.warning(f"Offline mode: no data for {stock_code}")
             return None
 
         # 1. 尝试缓存
@@ -158,6 +170,22 @@ class DataService:
                 self.store.save_price(stock_code, df, source=source.name)
                 return df
 
+        # 3. 样例兜底（仅当无任何可用真实数据源时，如各源初始化均失败）。
+        #    注意：演示数据不写入常规缓存，避免覆盖后续真实数据获取。
+        #    （在线模式下若真实源已初始化但网络失败，仍按原行为返回 None，
+        #     以保证"全源失败→None"的既有测试语义不被破坏。）
+        if not self._sources:
+            try:
+                demo = self._sample.get_price_data(stock_code, days)
+                if demo is not None and not demo.empty:
+                    demo = normalize_price_data(demo)
+                    report = validate_price_data(demo)
+                    if report.is_valid:
+                        logger.info(f"Using sample fallback for {stock_code}")
+                        return demo
+            except Exception as e:
+                logger.warning(f"Sample fallback failed for {stock_code}: {e}")
+
         logger.error(f"All sources failed: {stock_code}")
         return None
 
@@ -168,6 +196,14 @@ class DataService:
             price = source.get_realtime_price(stock_code)
             if price and price > 0:
                 return price
+        # 样例兜底（无真实源或离线模式）
+        if not self._sources or getattr(self.settings, "offline_mode", False):
+            try:
+                price = self._sample.get_realtime_price(stock_code)
+                if price and price > 0:
+                    return price
+            except Exception:
+                pass
         return None
 
     # ── 财务数据 ──
@@ -186,9 +222,18 @@ class DataService:
         """
         stock_code = validate_stock_code(stock_code)
 
-        # 离线模式：只读缓存
+        # 离线模式：只读缓存，无缓存则尝试样例兜底（合成演示财务）
         if getattr(self.settings, "offline_mode", False):
-            return self._load_cached_financial(stock_code, max_age_days)
+            cached = self._load_cached_financial(stock_code, max_age_days)
+            if cached is not None:
+                return cached
+            try:
+                snap = self._sample.get_financial_snapshot(stock_code)
+                if snap is not None:
+                    return snap
+            except Exception as e:
+                logger.warning(f"Offline financial fallback failed: {e}")
+            return None
 
         # 1. 遍历所有支持 get_financial_snapshot 的数据源
         snapshots: dict[str, FinancialSnapshot] = {}
@@ -232,7 +277,7 @@ class DataService:
                 )
                 return merged
 
-        # 4. 本地缓存降级
+        # 4. 本地缓存降级（含离线模式的样例兜底，见上方 offline 分支）
         return self._load_cached_financial(stock_code, max_age_days)
 
     def _load_cached_financial(

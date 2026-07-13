@@ -1116,3 +1116,43 @@ v3.0 重构的核心思想：
 | 真实交易执行 | Phase 3 | 未实现 |
 | 异步数据获取 | Phase 2 | 整个数据层同步 |
 | 数据源熔断器 | Phase 2 | 未实现 |
+
+---
+
+## 四、v3.1 易用性落地（已实现）
+
+针对"太不方便使用"的痛点，在不改动既有引擎/测试的前提下落地了 P0+P1：
+
+### 4.1 零配置开箱即用（数据层软降级）
+- 新增 `data/sources/sample.py::SamplePriceSource` 作为最终兜底：
+  - 优先读取 `data/samples/price/{code}.parquet` 内置**真实历史样例**；
+  - 否则基于股票代码生成**确定性合成演示行情**（明确标注 `[DEMO]`，仅供功能验证）。
+- `DataService` 在离线模式、或无任何可用真实数据源时自动走样例兜底；
+  演示数据**不写入常规缓存**，避免覆盖后续真实抓取。
+- 设计权衡：在线模式若真实源已初始化但网络失败，仍按原语义返回 `None`
+  （以保留"全源失败→None"的既有测试语义）；离线 / 全源初始化失败则自动兜底。
+
+### 4.2 LLM 软降级（多 Provider）
+- `llm/client.py`：新增 `soft_fail` 参数（默认 `False` 兼容原"无 key 抛错"测试）；
+  运行时通过 `get_llm_client_soft()` 使用软降级。
+- 无 API key 时进入离线规则增强模式（`enabled=False`），`invoke/structured_output`
+  返回中性模板，**三大 LLM 能力（情感/报告/风险解读）不再中断**。
+- 新增本地模型支持（Ollama / LM Studio 等 OpenAI 兼容服务），通过
+  `QUANT_LLM_BASE_URL` + `QUANT_LLM_LOCAL_MODEL` 配置。
+
+### 4.3 统一 CLI（Typer）
+- 新增 `quant_agent/cli.py`，入口 `quant-agent`：
+  `analyze` / `screen` / `batch` / `report`(list|show|latest) / `init`(配置向导) / `preload`。
+- `init` 交互生成 `.env` 并（可选）联网下载样例数据。
+- 旧入口 `python -m quant_agent.main` 保留兼容。
+
+### 4.4 可视化报告与历史（P1）
+- 新增 `quant_agent/reporting/`：
+  - `renderer.py` — 渲染 Markdown / 自包含 HTML 报告；
+  - `chart.py` — matplotlib 价格走势图（懒加载，缺失依赖时明确提示）；
+  - `history.py` — 报告持久化为 JSON + 索引，支持列出/查看/对比。
+- `quant-agent analyze --report --chart --format md|html` 一键产出。
+
+### 4.5 验证
+- 单元测试 + 集成测试全部通过（496 passed）；
+- 离线无 token 场景下 `analyze --offline` 可跑通完整流程并生成报告/图表。

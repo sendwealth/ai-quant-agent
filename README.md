@@ -1,6 +1,10 @@
-# AI Quant Agent v3.0
+# AI Quant Agent v3.1
 
 LLM 增强的多 Agent 协作 A 股量化交易系统。规则引擎 + LLM 双引擎，支持自然语言交互。
+
+> **v3.1 易用性升级**：零配置开箱即用（无 token / 无网络时自动走样例兜底 + LLM 离线规则增强）；
+> 统一 Typer CLI（`analyze` / `screen` / `batch` / `report` / `init` / `preload`）；
+> 分析报告可视化（Markdown / HTML / 走势图）与历史对比。
 
 ## 架构
 
@@ -8,6 +12,7 @@ LLM 增强的多 Agent 协作 A 股量化交易系统。规则引擎 + LLM 双�
 数据源 (Tushare/efinance/AkShare/BaoStock)
     ↓  [RateLimiter]  [并发获取]  [修复-再验证]
 DataService (4源降级 + 财务合并 + 缓存 + 校验 + 离线模式 + 文件锁)
+    ↓  └─ 样例兜底源 (离线/全源失败 → 真实样例或合成演示行情，零配置可用)
     ↓
 ┌─────────────┬─────────────┬─────────────┐
 │ Fundamental  │  Technical  │  Sentiment  │  ← 分析师 Agent
@@ -20,11 +25,12 @@ DataService (4源降级 + 财务合并 + 缓存 + 校验 + 离线模式 + 文件
                      ↓
              BacktestEngine         ← Sharpe/Sortino/MaxDD + 确定性验证
 
-         ┌── LLM 层 (LangChain + OpenAI/智谱 GLM) ──┐
+         ┌── LLM 层 (LangChain + OpenAI/智谱 GLM/本地模型) ──┐
          │  SentimentAgent (新闻情感)                  │
          │  PlannerAgent   (指令解析)                  │
          │  LLMReportGenerator (报告生成)              │
          │  RiskAgent.interpret_risk (风险解读)        │
+         │  ※ 无 API key 时软降级为离线规则增强（不崩溃） │
          └────────────────────────────────────────────┘
 ```
 
@@ -35,10 +41,13 @@ Agent 通过 **Orchestrator** 编排，使用结构化日志记录，返回标�
 ## 核心特性
 
 - **LLM 双引擎** — 规则引擎为基础，LangChain ChatOpenAI 提供情感分析、报告生成、风险解读
-- **双 Provider** — OpenAI / 智谱 GLM 自动切换，`openai_api_key` 优先，`zhipu_api_key` 备选
-- **自然语言交互** — `--prompt "分析宁德时代的买入机会"` 智能解析股票代码和分析范围
-- **真实数据** — 4 源降级链 (Tushare/efinance/AkShare/BaoStock)，财务多源合并，FinancialSnapshot schema 验证
-- **离线模式** — `--preload` 预下载 + `--offline` 纯缓存分析，无需网络
+- **多 Provider + 软降级** — OpenAI / 智谱 GLM / 本地模型(Ollama 等) 自动切换；**无 API key 不崩溃**，自动降级为离线规则增强，三大 LLM 能力始终可用
+- **零配置开箱即用** — 无 token / 无网络时，数据层自动走样例兜底（真实样例或合成演示行情），全流程可跑通
+- **统一 CLI** — `quant-agent analyze / screen / batch / report / init / preload`，带 `--help` 与补全
+- **可视化报告** — 分析结果渲染为 Markdown / HTML，生成价格走势图，并持久化历史可对比
+- **自然语言交互** — `--prompt "分析宁德时代的买入机会"` 智能解析股票代码和分析范围（需 LLM）
+- **真实数据** — 4 源降级链 (Tushare/efinance/AkShare/BaoStock) + 样例兜底，财务多源合并，FinancialSnapshot schema 验证
+- **离线模式** — `--preload` 预下载 + `--offline` 纯缓存/样例分析，无需网络
 - **多 Agent 协作** — 基本面 + 技术面 + 情感 → 风控共识 → 执行，Orchestrator 统一编排
 - **回测引擎** — Sharpe/Sortino/Calmar/MaxDD/Alpha/Beta 全指标 + 确定性验证
 - **风控系统** — 动态仓位、止损止盈、信号共识机制，参数通过 Settings 配置
@@ -82,26 +91,42 @@ QUANT_EMAIL_PASSWORD=授权码      # 163邮箱: 设置 → POP3/SMTP → 开启
 QUANT_EMAIL_RECIPIENTS=xxx@163.com
 ```
 
-### Step 3: 运行
+### Step 3: 运行（新 CLI）
 
 ```bash
-# 单股分析
-uv run python -m quant_agent.main --stock 300750
+# 配置向导：交互生成 .env，可选下载样例数据
+quant-agent init
 
+# 单股深度分析（默认保存 Markdown 报告；--chart 生成走势图）
+quant-agent analyze 600519
+quant-agent analyze 600519 --chart --format html
+
+# 零配置离线分析（无 token / 无网络也能跑，自动用样例兜底）
+quant-agent analyze 600519 --offline
+
+# 智能选股
+quant-agent screen --top 10
+quant-agent screen --top 5 --deep        # 选股 + 对 Top N 深度分析
+
+# 批量分析
+quant-agent batch 600519,300750,000858
+
+# 查看 / 导出历史报告
+quant-agent report list
+quant-agent report latest 600519
+```
+
+旧入口仍可用（向后兼容）：`python -m quant_agent.main --stock 300750`。
+
+```bash
 # 用中文提问 (需要 LLM key)
-uv run python -m quant_agent.main --prompt "贵州茅台现在能买吗"
-
-# 智能选股 (从 ~179 只候选池中筛选 Top 20)
-uv run python -m quant_agent.main --screen
-
-# 选股 + 深度分析 Top 5
-uv run python -m quant_agent.main --screen --screen-analyze --top 5
+quant-agent ...   # 自然语言入口见 --prompt（需配置 LLM）
 
 # 预下载数据 (用于离线分析)
-uv run python -m quant_agent.main --preload --stocks 300750,002475
+quant-agent preload --stocks 300750,002475
 
-# 离线分析 (仅使用本地缓存，不发 API 请求)
-uv run python -m quant_agent.main --stock 300750 --offline
+# 旧式选股 + 深度分析
+uv run python -m quant_agent.main --screen --screen-analyze --top 5
 
 # 批量分析 4 只股票 + 邮件汇总
 uv run python -m quant_agent.main --daily-report

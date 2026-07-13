@@ -23,6 +23,8 @@ dependencies = [
     "langchain-openai>=1.0.0",
     "langchain-community>=0.3.0",
     "efinance>=0.5.8",
+    "typer>=0.26.8",
+    "matplotlib>=3.10.9",
 ]
 
 [project.optional-dependencies]
@@ -34,7 +36,7 @@ dev = [
 ]
 
 [project.scripts]
-quant-agent = "quant_agent.main:run_pipeline"
+quant-agent = "quant_agent.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
