@@ -51,7 +51,7 @@ def plot_price_chart(
     if price_df is not None and not price_df.empty and "close" in price_df.columns:
         dates = price_df["date"] if "date" in price_df.columns else price_df.index
         ax.plot(dates, price_df["close"], label="收盘价", color="#2563eb", linewidth=1.2)
-        ax.set_ylabel("价格")
+        ax.set_ylabel("Price")
         ax.grid(True, alpha=0.3)
     else:
         ax.text(0.5, 0.5, "无行情数据", ha="center", va="center")

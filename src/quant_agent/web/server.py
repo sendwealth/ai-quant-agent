@@ -1,0 +1,354 @@
+"""Web 服务 — 标准库实现，零额外依赖
+
+提供：
+- 静态前端 (index.html / app.js / styles.css)
+- JSON API:
+    GET  /api/health
+    POST /api/analyze        {stock_code, days, offline, chart}
+    GET  /api/screen?top=&full_scan=&fundamentals=&deep=
+    GET  /api/reports
+    GET  /api/report?file=<name>
+    GET  /api/report/latest?stock=<code>
+    GET  /api/chart/<filename>   走势图 PNG
+
+设计取舍：为坚持「零配置 / 离线可用」，刻意不引入 FastAPI/uvicorn，
+仅用标准库 http.server。在受限网络环境也可直接运行。
+
+为便于测试，所有业务逻辑抽成 `*_core` 纯函数，由 HTTP 处理器负责序列化。
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlparse, parse_qs
+
+from ..config import get_settings
+from ..orchestrator import Orchestrator
+from ..reporting import (
+    render_markdown,
+    save_report,
+    list_reports,
+    load_report,
+    latest_for_stock,
+    plot_price_chart,
+)
+
+logger = logging.getLogger(__name__)
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+REPORTS_DIR = Path("data/reports")
+
+# 进程内编排器缓存（key = offline 标志）
+_ORCH_CACHE: dict[bool, Orchestrator] = {}
+_ORCH_LOCK = threading.Lock()
+
+
+def _get_orchestrator(offline: bool) -> Orchestrator:
+    """惰性获取编排器，按 offline 标志缓存，避免重复初始化数据源。"""
+    if offline:
+        os.environ["QUANT_OFFLINE_MODE"] = "true"
+    with _ORCH_LOCK:
+        if offline not in _ORCH_CACHE:
+            _ORCH_CACHE[offline] = Orchestrator()
+        return _ORCH_CACHE[offline]
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 核心业务逻辑（可单测）
+# ──────────────────────────────────────────────────────────────────────────
+
+
+def health_core() -> dict:
+    settings = get_settings()
+    offline = getattr(settings, "offline_mode", False)
+    llm_enabled = False
+    try:
+        orch = _get_orchestrator(False)
+        llm_enabled = bool(orch.llm and orch.llm.enabled)
+    except Exception as e:
+        logger.warning("health llm check failed: %s", e)
+    return {
+        "status": "ok",
+        "offline_mode": offline,
+        "llm_enabled": llm_enabled,
+        "app": settings.app_name,
+    }
+
+
+def analyze_core(params: dict) -> dict:
+    """执行单股分析，返回 {stock_code, markdown, report, chart_url}。"""
+    stock_code = (params.get("stock_code") or "").strip()
+    if not stock_code:
+        raise ValueError("请提供 stock_code")
+    days = int(params.get("days", 120) or 120)
+    offline = bool(params.get("offline", False))
+    want_chart = bool(params.get("chart", False))
+
+    orch = _get_orchestrator(offline)
+    result = orch.analyze(stock_code, days=days)
+
+    try:
+        save_report(result, base_dir=REPORTS_DIR)
+    except Exception as e:
+        logger.warning("保存历史失败: %s", e)
+
+    chart_url = None
+    if want_chart:
+        try:
+            price = orch.data.get_price_data(stock_code, days=days)
+            chart_path = REPORTS_DIR / f"{stock_code}_chart.png"
+            plot_price_chart(price, result, chart_path)
+            chart_url = f"/api/chart/{stock_code}_chart.png"
+        except Exception as e:
+            logger.warning("图表生成失败: %s", e)
+
+    return {
+        "stock_code": result.stock_code,
+        "markdown": render_markdown(result),
+        "report": result.to_dict(),
+        "chart_url": chart_url,
+    }
+
+
+def screen_core(qs: dict) -> dict:
+    """执行智能选股，返回 {top_stocks, deep_reports}。"""
+    top = int((qs.get("top", ["10"])[0]) or 10)
+    full_scan = qs.get("full_scan", ["0"])[0] in ("1", "true", "True")
+    fundamentals = qs.get("fundamentals", ["0"])[0] in ("1", "true", "True")
+    deep = qs.get("deep", ["0"])[0] in ("1", "true", "True")
+    offline = qs.get("offline", ["0"])[0] in ("1", "true", "True")
+
+    orch = _get_orchestrator(offline)
+    if deep:
+        screen_result, reports = orch.screen_and_analyze(
+            use_full_market=full_scan,
+            top_n=top,
+            include_fundamentals=fundamentals,
+        )
+        deep_reports = [
+            {"stock_code": r.stock_code, "report": r.to_dict()} for r in reports
+        ]
+    else:
+        screen_result = orch.screener.screen(
+            use_full_market=full_scan,
+            top_n=top,
+            include_fundamentals=fundamentals,
+        )
+        deep_reports = []
+
+    return {
+        "top_stocks": [_scored_stock_to_dict(s) for s in screen_result.top_stocks],
+        "deep_reports": deep_reports,
+    }
+
+
+def reports_core() -> dict:
+    return {"reports": list_reports(REPORTS_DIR)}
+
+
+def report_core(qs: dict, parts: list[str]) -> dict:
+    """按文件名加载报告，或最新报告（parts[0]=='latest'）。"""
+    if parts and parts[0] == "latest":
+        stock = qs.get("stock", [None])[0]
+        if not stock:
+            raise ValueError("请提供 stock 参数")
+        data = latest_for_stock(stock, REPORTS_DIR)
+        if data is None:
+            raise FileNotFoundError(f"未找到 {stock} 的历史报告")
+        return {"report": data, "markdown": render_markdown_from_dict(data)}
+
+    file = qs.get("file", [None])[0]
+    if not file:
+        raise ValueError("请提供 file 参数")
+    data = load_report(file, REPORTS_DIR)
+    if data is None:
+        raise FileNotFoundError(f"未找到报告: {file}")
+    return {"report": data, "markdown": render_markdown_from_dict(data)}
+
+
+def _scored_stock_to_dict(s) -> dict:
+    return {
+        "stock_code": s.stock_code,
+        "price": getattr(s, "price", None),
+        "total_score": getattr(s, "total_score", None),
+        "technical_score": getattr(s, "technical_score", None),
+        "momentum_score": getattr(s, "momentum_score", None),
+        "liquidity_score": getattr(s, "liquidity_score", None),
+        "fundamental_score": getattr(s, "fundamental_score", None),
+    }
+
+
+def render_markdown_from_dict(data: dict) -> str:
+    """将历史报告 dict 渲染为 Markdown（轻量）"""
+    lines = [
+        f"# 历史报告 — {data.get('stock_code', '?')}",
+        f"> 时间: {data.get('timestamp', '')}",
+        "",
+        f"- 信号: {data.get('signal')}",
+        f"- 信心度: {data.get('confidence')}",
+        f"- 建议仓位: {data.get('position_pct')}",
+    ]
+    if data.get("llm_analysis"):
+        lines.append("\n## LLM 综合报告\n" + str(data.get("llm_analysis")))
+    if data.get("risk_interpretation"):
+        lines.append("\n## 风险解读\n" + str(data.get("risk_interpretation")))
+    return "\n".join(lines)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# HTTP 处理器
+# ──────────────────────────────────────────────────────────────────────────
+
+
+def _json_response(handler, payload, status=200):
+    body = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
+    handler.send_response(status)
+    handler.send_header("Content-Type", "application/json; charset=utf-8")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def _error(handler, message: str, status=400):
+    _json_response(handler, {"error": message}, status=status)
+
+
+def _read_json_body(handler) -> dict:
+    length = int(handler.headers.get("Content-Length", 0) or 0)
+    if length == 0:
+        return {}
+    raw = handler.rfile.read(length)
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except Exception:
+        return {}
+
+
+def _api_dispatch(handler, path: str, qs: dict) -> bool:
+    """处理 /api/* 路由；返回 True 表示已处理。"""
+    if path == "/api/health":
+        _json_response(handler, health_core())
+        return True
+    if path == "/api/analyze":
+        if handler.command != "POST":
+            _error(handler, "仅支持 POST", status=405)
+            return True
+        _json_response(handler, analyze_core(_read_json_body(handler)))
+        return True
+    if path == "/api/screen":
+        _json_response(handler, screen_core(qs))
+        return True
+    if path == "/api/reports":
+        _json_response(handler, reports_core())
+        return True
+    if path.startswith("/api/report"):
+        _json_response(
+            handler, report_core(qs, path[len("/api/report"):].strip("/").split("/"))
+        )
+        return True
+    if path.startswith("/api/chart/"):
+        _serve_chart(handler, path[len("/api/chart/"):])
+        return True
+    return False
+
+
+def _serve_static(handler, rel_path: str) -> None:
+    if rel_path in ("", "/"):
+        rel_path = "index.html"
+    safe = Path(rel_path.lstrip("/"))
+    full = (STATIC_DIR / safe).resolve()
+    if not str(full).startswith(str(STATIC_DIR.resolve())) or not full.exists():
+        handler.send_error(404, "Not Found")
+        return
+    ctype = {
+        ".html": "text/html; charset=utf-8",
+        ".js": "application/javascript; charset=utf-8",
+        ".css": "text/css; charset=utf-8",
+        ".png": "image/png",
+        ".ico": "image/x-icon",
+    }.get(full.suffix, "application/octet-stream")
+    body = full.read_bytes()
+    handler.send_response(200)
+    handler.send_header("Content-Type", ctype)
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+def _serve_chart(handler, filename: str) -> None:
+    full = (REPORTS_DIR / Path(filename).name).resolve()
+    if not full.exists() or full.suffix.lower() != ".png":
+        handler.send_error(404, "Not Found")
+        return
+    body = full.read_bytes()
+    handler.send_response(200)
+    handler.send_header("Content-Type", "image/png")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
+class _Handler(BaseHTTPRequestHandler):
+    def log_message(self, fmt, *args):
+        logger.info("HTTP " + fmt, *args)
+
+    def _handle(self):
+        parsed = urlparse(self.path)
+        path = parsed.path
+        qs = parse_qs(parsed.query)
+        try:
+            if path.startswith("/api/"):
+                if _api_dispatch(self, path, qs):
+                    return
+                _error(self, f"未知 API: {path}", status=404)
+                return
+            if path.startswith("/static/"):
+                _serve_static(self, path[len("/static/"):])
+                return
+            _serve_static(self, path)
+        except ValueError as e:
+            _error(self, str(e), status=400)
+        except FileNotFoundError as e:
+            _error(self, str(e), status=404)
+        except Exception as e:
+            logger.exception("API error")
+            _error(self, f"服务器错误: {e}", status=500)
+
+    def do_GET(self):
+        self._handle()
+
+    def do_POST(self):
+        self._handle()
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
+
+def run_web(host: str = "127.0.0.1", port: int = 8000, offline: bool = False) -> None:
+    """启动 Web 服务（阻塞）"""
+    if offline:
+        os.environ["QUANT_OFFLINE_MODE"] = "true"
+    server = ThreadingHTTPServer((host, port), _Handler)
+    url = f"http://{host}:{port}"
+    print(f"\n  AI Quant Agent Web UI 已启动")
+    print(f"  → {url}")
+    print(f"  (Ctrl+C 退出)\n")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n正在关闭 Web 服务...")
+        server.shutdown()
+
+
+if __name__ == "__main__":
+    run_web()

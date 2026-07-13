@@ -372,5 +372,22 @@ def preload(
     typer.echo(f"\n完成：{ok}/{len(codes)}")
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# web（Web UI）
+# ──────────────────────────────────────────────────────────────────────────
+
+
+@app.command()
+def web(
+    host: str = typer.Option("127.0.0.1", "--host", help="监听地址"),
+    port: int = typer.Option(8000, "--port", "-p", help="监听端口"),
+    offline: bool = typer.Option(False, "--offline", help="离线模式（仅用本地/样例数据）"),
+):
+    """启动 Web UI（零依赖，标准库实现；浏览器打开 http://<host>:<port>）"""
+    from .web.server import run_web
+
+    run_web(host=host, port=port, offline=offline)
+
+
 if __name__ == "__main__":
     app()

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Quant Agent · 量化分析</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">📈 AI Quant Agent</div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="analyze">个股分析</button>
+      <button class="tab" data-tab="screen">智能选股</button>
+      <button class="tab" data-tab="reports">历史报告</button>
+    </nav>
+    <div class="status" id="status-bar">连接中…</div>
+  </header>
+
+  <main>
+    <!-- 个股分析 -->
+    <section class="panel active" id="tab-analyze">
+      <div class="card">
+        <form id="analyze-form" class="row">
+          <input id="stock-code" type="text" placeholder="股票代码，如 600519" />
+          <input id="analyze-days" type="number" value="120" min="20" max="500" title="分析天数" />
+          <label class="chk"><input type="checkbox" id="analyze-offline" /> 离线</label>
+          <label class="chk"><input type="checkbox" id="analyze-chart" checked /> 走势图</label>
+          <button type="submit" class="btn primary">分析</button>
+        </form>
+        <div class="quick">
+          快捷：<a data-code="600519">600519 茅台</a>
+          <a data-code="300750">300750 宁德</a>
+          <a data-code="000858">000858 五粮液</a>
+        </div>
+      </div>
+      <div id="analyze-result" class="result"></div>
+    </section>
+
+    <!-- 智能选股 -->
+    <section class="panel" id="tab-screen">
+      <div class="card">
+        <form id="screen-form" class="row">
+          <label>数量 <input id="screen-top" type="number" value="10" min="1" max="50" /></label>
+          <label class="chk"><input type="checkbox" id="screen-full" /> 全市场</label>
+          <label class="chk"><input type="checkbox" id="screen-fund" /> 含基本面</label>
+          <label class="chk"><input type="checkbox" id="screen-deep" /> 深度分析</label>
+          <button type="submit" class="btn primary">选股</button>
+        </form>
+      </div>
+      <div id="screen-result" class="result"></div>
+    </section>
+
+    <!-- 历史报告 -->
+    <section class="panel" id="tab-reports">
+      <div class="card row">
+        <button id="reports-refresh" class="btn">刷新</button>
+        <span class="hint">点击任意报告查看详情</span>
+      </div>
+      <div id="reports-result" class="result"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

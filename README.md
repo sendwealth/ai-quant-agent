@@ -45,6 +45,7 @@ Agent 通过 **Orchestrator** 编排，使用结构化日志记录，返回标�
 - **零配置开箱即用** — 无 token / 无网络时，数据层自动走样例兜底（真实样例或合成演示行情），全流程可跑通
 - **统一 CLI** — `quant-agent analyze / screen / batch / report / init / preload`，带 `--help` 与补全
 - **可视化报告** — 分析结果渲染为 Markdown / HTML，生成价格走势图，并持久化历史可对比
+- **Web UI** — 内置零依赖 Web 服务（`quant-agent web`），浏览器即可做个股分析 / 智能选股 / 查看历史报告与走势图
 - **自然语言交互** — `--prompt "分析宁德时代的买入机会"` 智能解析股票代码和分析范围（需 LLM）
 - **真实数据** — 4 源降级链 (Tushare/efinance/AkShare/BaoStock) + 样例兜底，财务多源合并，FinancialSnapshot schema 验证
 - **离线模式** — `--preload` 预下载 + `--offline` 纯缓存/样例分析，无需网络
@@ -114,7 +115,22 @@ quant-agent batch 600519,300750,000858
 # 查看 / 导出历史报告
 quant-agent report list
 quant-agent report latest 600519
+
+# 启动 Web UI（浏览器打开 http://127.0.0.1:8000）
+quant-agent web
+quant-agent web --port 8080 --offline   # 指定端口 / 离线模式
 ```
+
+### Web UI
+
+`quant-agent web` 启动一个**零额外依赖**的 Web 服务（基于 Python 标准库，离线即可运行），
+打开提示的地址即可使用：
+
+- **个股分析**：输入代码 → 返回信号 / 各 Agent 结论 / 走势图；可勾选「离线」「走势图」
+- **智能选股**：设置数量与开关，查看 Top N 评分榜单（可深度分析）
+- **历史报告**：列出全部历史分析，点击查看详情与对比
+
+> API 路径：`/api/health`、`/api/analyze`(POST)、`/api/screen`、`/api/reports`、`/api/report?file=`、`/api/chart/<file>`
 
 旧入口仍可用（向后兼容）：`python -m quant_agent.main --stock 300750`。
 

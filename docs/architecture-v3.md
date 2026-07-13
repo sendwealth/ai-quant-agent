@@ -1156,3 +1156,41 @@ v3.0 重构的核心思想：
 ### 4.5 验证
 - 单元测试 + 集成测试全部通过（496 passed）；
 - 离线无 token 场景下 `analyze --offline` 可跑通完整流程并生成报告/图表。
+
+---
+
+## 五、v3.2 Web UI（P2，已实现）
+
+为降低使用门槛，在 P0+P1 基础上新增浏览器界面，仍坚持「零配置 / 离线可用」原则。
+
+### 5.1 技术选型
+
+- **未引入 FastAPI / uvicorn**：当前环境访问 PyPI 受限（`uv add fastapi` 超时失败），
+  且为贯彻「零依赖、开箱即用」，Web 服务直接基于 **Python 标准库 `http.server`**
+  （`ThreadingHTTPServer` + `BaseHTTPRequestHandler`）实现，无需任何额外安装。
+- 前端为零构建的静态页面（原生 HTML/CSS/JS），含轻量 Markdown 渲染器。
+
+### 5.2 结构
+
+- `quant_agent/web/server.py` — HTTP 服务与 JSON API；业务逻辑抽成 `*_core` 纯函数
+  （`health_core` / `analyze_core` / `screen_core` / `reports_core` / `report_core`），
+  便于单测与复用。
+- `quant_agent/web/static/` — `index.html` / `app.js` / `styles.css`（深色主题，三标签页）。
+- CLI：`quant-agent web [--host --port --offline]`（见 `cli.py`）。
+
+### 5.3 API
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET  | `/api/health` | 服务状态 / LLM 是否启用 / 离线标志 |
+| POST | `/api/analyze` | `{stock_code, days, offline, chart}` → 报告 + 走势图 URL |
+| GET  | `/api/screen?top=&full_scan=&fundamentals=&deep=` | 选股榜单 / 深度分析 |
+| GET  | `/api/reports` | 历史报告索引 |
+| GET  | `/api/report?file=<name>` 或 `/api/report/latest?stock=<code>` | 单份报告详情 |
+| GET  | `/api/chart/<filename>` | 走势图 PNG |
+
+### 5.4 验证
+
+- 新增 `tests/unit/test_web.py`：进程内启动 HTTP 服务 + `urllib` 请求，
+  覆盖 health / analyze(含图表) / reports / report show / 404 / 静态资源，**6 passed**。
+- 全量测试 **502 passed**（496 + 6）。

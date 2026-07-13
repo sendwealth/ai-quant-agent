@@ -1,0 +1,162 @@
+:root {
+  --bg: #0f172a;
+  --bg-soft: #1e293b;
+  --card: #1e293b;
+  --border: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #2563eb;
+  --green: #16a34a;
+  --red: #dc2626;
+  --amber: #d97706;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand { font-weight: 700; font-size: 1.1rem; }
+
+.tabs { display: flex; gap: 0.25rem; flex: 1; }
+
+.tab {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.tab:hover { color: var(--text); background: #0b1220; }
+.tab.active { color: #fff; background: var(--accent); }
+
+.status { font-size: 0.8rem; color: var(--muted); }
+.status.ok::before { content: "● "; color: var(--green); }
+.status.err::before { content: "● "; color: var(--red); }
+
+main { max-width: 980px; margin: 1.5rem auto; padding: 0 1rem; }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.row { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+
+input[type="text"], input[type="number"] {
+  background: #0b1220;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+input[type="number"] { width: 90px; }
+#stock-code { width: 200px; }
+
+.chk { display: inline-flex; align-items: center; gap: 0.3rem; color: var(--muted); font-size: 0.9rem; }
+
+.btn {
+  background: #0b1220;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.quick { margin-top: 0.6rem; font-size: 0.85rem; color: var(--muted); }
+.quick a { color: var(--accent); cursor: pointer; margin-right: 0.8rem; }
+.quick a:hover { text-decoration: underline; }
+
+.hint { color: var(--muted); font-size: 0.85rem; }
+
+.result { min-height: 60px; }
+
+/* 报告卡片 */
+.report-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+}
+.report-card h1 { border-bottom: 2px solid var(--accent); padding-bottom: 0.4rem; margin-top: 0; }
+.report-card h2 { color: var(--accent); margin-top: 1.4rem; }
+.report-card h3 { margin-bottom: 0.3rem; }
+.report-card blockquote {
+  background: #0b1220; padding: 0.5rem 1rem; border-left: 4px solid var(--muted);
+  margin: 0.5rem 0; color: var(--muted);
+}
+.report-card ul { padding-left: 1.2rem; }
+.report-card code {
+  background: #0b1220; padding: 0.1rem 0.35rem; border-radius: 4px; color: #93c5fd;
+}
+.report-card p { white-space: pre-wrap; }
+
+.badge {
+  display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px;
+  font-weight: 700; font-size: 0.85rem; color: #fff;
+}
+.badge.BUY { background: var(--green); }
+.badge.SELL { background: var(--red); }
+.badge.HOLD { background: var(--muted); }
+
+/* 选股表 */
+table.grid { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+table.grid th, table.grid td {
+  text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+table.grid th { color: var(--muted); font-weight: 600; }
+table.grid tr:hover td { background: #0b1220; }
+table.grid td.score { color: #93c5fd; font-weight: 600; }
+
+.report-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.6rem 0.9rem; border: 1px solid var(--border); border-radius: 8px;
+  margin-bottom: 0.5rem; cursor: pointer; background: var(--card);
+}
+.report-item:hover { border-color: var(--accent); }
+.report-item .meta { color: var(--muted); font-size: 0.82rem; }
+
+.chart-img { max-width: 100%; border-radius: 10px; margin-top: 1rem; border: 1px solid var(--border); }
+
+.loading { color: var(--muted); padding: 1rem; }
+.error-box { color: #fecaca; background: #7f1d1d33; border: 1px solid #b91c1c; padding: 0.8rem 1rem; border-radius: 8px; }
+
+.toast {
+  position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+  background: var(--bg-soft); border: 1px solid var(--border); color: var(--text);
+  padding: 0.6rem 1.2rem; border-radius: 10px; box-shadow: 0 8px 24px #0008;
+}
+.toast.hidden { display: none; }
