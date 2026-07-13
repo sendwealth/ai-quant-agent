@@ -130,8 +130,10 @@ def screen_core(qs: dict) -> dict:
             top_n=top,
             include_fundamentals=fundamentals,
         )
+        name_map = {s.stock_code: getattr(s, "name", None) or "" for s in screen_result.top_stocks}
         deep_reports = [
-            {"stock_code": r.stock_code, "report": r.to_dict()} for r in reports
+            {"stock_code": r.stock_code, "name": name_map.get(r.stock_code, ""), "report": r.to_dict()}
+            for r in reports
         ]
     else:
         screen_result = orch.screener.screen(
@@ -174,6 +176,7 @@ def report_core(qs: dict, parts: list[str]) -> dict:
 def _scored_stock_to_dict(s) -> dict:
     return {
         "stock_code": s.stock_code,
+        "name": getattr(s, "name", None) or "",
         "price": getattr(s, "price", None),
         "total_score": getattr(s, "total_score", None),
         "technical_score": getattr(s, "technical_score", None),

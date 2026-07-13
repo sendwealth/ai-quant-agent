@@ -137,7 +137,8 @@ $("#screen-form").addEventListener("submit", async (e) => {
     const rows = (d.top_stocks || []).map((s, i) => `
       <tr>
         <td>${i + 1}</td>
-        <td>${s.stock_code}</td>
+        <td class="code">${s.stock_code}</td>
+        <td class="name">${s.name ? escapeHtml(s.name) : "-"}</td>
         <td>${s.price != null ? Number(s.price).toFixed(2) : "-"}</td>
         <td class="score">${s.total_score != null ? Number(s.total_score).toFixed(1) : "-"}</td>
         <td>${s.technical_score ?? "-"}</td>
@@ -151,14 +152,15 @@ $("#screen-form").addEventListener("submit", async (e) => {
     }
     let html = `<div class="report-card"><h2>智能选股 Top ${d.top_stocks.length}</h2>
       <table class="grid">
-        <thead><tr><th>#</th><th>代码</th><th>价格</th><th>评分</th><th>技术</th><th>动量</th><th>流动</th><th>基本</th></tr></thead>
+        <thead><tr><th>#</th><th>代码</th><th>名称</th><th>价格</th><th>评分</th><th>技术</th><th>动量</th><th>流动</th><th>基本</th></tr></thead>
         <tbody>${rows}</tbody></table></div>`;
     if (d.deep_reports && d.deep_reports.length) {
       html += '<h2 style="margin-top:1.5rem;color:var(--accent)">深度分析</h2>';
       d.deep_reports.forEach((r) => {
         html += `<div class="report-card" style="margin-top:.8rem">${renderMarkdown(r.report ? "" : "")}`;
         const sig = r.report && r.report.signal ? r.report.signal : "HOLD";
-        html += `<p><span class="badge ${sig}">${sig}</span> ${r.stock_code}</p></div>`;
+        const nm = r.name ? ` ${escapeHtml(r.name)}` : "";
+        html += `<p><span class="badge ${sig}">${sig}</span> ${r.stock_code}${nm}</p></div>`;
       });
     }
     box.innerHTML = html;

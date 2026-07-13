@@ -107,3 +107,42 @@ def test_static_index(server):
         assert "<title>" in html
     with urllib.request.urlopen(f"{server}/static/app.js", timeout=10) as r:
         assert "application/javascript" in r.headers.get("Content-Type", "")
+
+
+def test_screen_returns_stock_names():
+    """选股结果应附带股票名称（离线默认池通过内置映射解析）。"""
+    import pandas as pd
+
+    from quant_agent.screener.engine import ScreeningEngine, STOCK_NAME_MAP
+
+    def _fake_multi_price(codes, days=120, **_):
+        out = {}
+        for c in codes:
+            out[c] = pd.DataFrame(
+                {
+                    "date": pd.date_range("2024-01-01", periods=30, freq="D"),
+                    "open": [10] * 30,
+                    "close": [10 + i for i in range(30)],
+                    "high": [11] * 30,
+                    "low": [9] * 30,
+                    "volume": [1_000_000] * 30,
+                }
+            )
+        return out
+
+    class _FakeDS:
+        def get_multi_price(self, codes, days=120, **_):
+            return _fake_multi_price(codes, days=days)
+
+    eng = ScreeningEngine(data_service=_FakeDS())
+    res = eng.screen(stock_codes=["600519", "601318", "000001"], top_n=3)
+    names = {s.stock_code: s.name for s in res.top_stocks}
+    assert names["600519"] == STOCK_NAME_MAP["600519"] == "贵州茅台"
+    assert names["601318"] == STOCK_NAME_MAP["601318"] == "中国平安"
+    assert names["000001"] == STOCK_NAME_MAP["000001"] == "平安银行"
+    # 透传到 web 层序列化
+    from quant_agent.web.server import _scored_stock_to_dict
+
+    d = _scored_stock_to_dict(res.top_stocks[0])
+    assert d["name"] == "贵州茅台"
+
