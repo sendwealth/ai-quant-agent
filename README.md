@@ -3,7 +3,7 @@
 LLM 增强的多 Agent 协作 A 股量化交易系统。规则引擎 + LLM 双引擎，支持自然语言交互。
 
 > **v3.1 易用性升级**：零配置开箱即用（无 token / 无网络时自动走样例兜底 + LLM 离线规则增强）；
-> 统一 Typer CLI（`analyze` / `screen` / `batch` / `report` / `init` / `preload`）；
+> 统一 Typer CLI（`analyze` / `screen` / `batch` / `report` / `update-names` / `init` / `preload`）；
 > 分析报告可视化（Markdown / HTML / 走势图）与历史对比。
 
 ## 架构
@@ -43,7 +43,7 @@ Agent 通过 **Orchestrator** 编排，使用结构化日志记录，返回标�
 - **LLM 双引擎** — 规则引擎为基础，LangChain ChatOpenAI 提供情感分析、报告生成、风险解读
 - **多 Provider + 软降级** — OpenAI / 智谱 GLM / 本地模型(Ollama 等) 自动切换；**无 API key 不崩溃**，自动降级为离线规则增强，三大 LLM 能力始终可用
 - **零配置开箱即用** — 无 token / 无网络时，数据层自动走样例兜底（真实样例或合成演示行情），全流程可跑通
-- **统一 CLI** — `quant-agent analyze / screen / batch / report / init / preload`，带 `--help` 与补全
+- **统一 CLI** — `quant-agent analyze / screen / batch / report / update-names / init / preload`，带 `--help` 与补全
 - **可视化报告** — 分析结果渲染为 Markdown / HTML，生成价格走势图，并持久化历史可对比
 - **Web UI** — 内置零依赖 Web 服务（`quant-agent web`），浏览器即可做个股分析 / 智能选股 / 查看历史报告与走势图
 - **自然语言交互** — `--prompt "分析宁德时代的买入机会"` 智能解析股票代码和分析范围（需 LLM）
@@ -108,6 +108,12 @@ quant-agent analyze 600519 --offline
 # 智能选股
 quant-agent screen --top 10
 quant-agent screen --top 5 --deep        # 选股 + 对 Top N 深度分析
+#   选股结果（含股票名称）示例：
+#   #  代码       名称           价格     评分
+#   1  600519     贵州茅台     1699.00   88.0
+
+# 刷新全市场股票代码→名称映射（需联网；写入 data/stock_names.json，离线可用）
+quant-agent update-names
 
 # 批量分析
 quant-agent batch 600519,300750,000858

@@ -1,12 +1,13 @@
 """CLI 入口 — Typer 子命令（易用性优先）
 
 子命令:
-  analyze  单股深度分析（规则 + LLM 增强，离线可用）
-  screen   智能选股
-  batch    批量分析
-  report   历史报告查看 / 导出
-  init     配置向导（交互生成 .env，可选下载样例）
-  preload  预下载行情到本地缓存
+  analyze       单股深度分析（规则 + LLM 增强，离线可用）
+  screen        智能选股（结果含股票名称）
+  batch         批量分析
+  report        历史报告查看 / 导出
+  update-names  刷新全市场股票代码→名称映射（需联网）
+  init          配置向导（交互生成 .env，可选下载样例）
+  preload       预下载行情到本地缓存
 
 零配置开箱即用：无 API key / 无网络时自动走样例兜底 + LLM 离线规则增强。
 """
@@ -23,6 +24,7 @@ import typer
 
 from .config import get_settings
 from .orchestrator import Orchestrator
+from .screener.stock_names import get_stock_name, update_stock_names
 from .reporting import (
     render_markdown,
     render_html,
@@ -139,20 +141,28 @@ def screen(
         )
 
     top_stocks = screen_result.top_stocks
-    typer.echo("\n" + "=" * 78)
+    typer.echo("\n" + "=" * 90)
     typer.echo(f"智能选股 Top {len(top_stocks)}")
-    typer.echo("=" * 78)
-    header = f"{'#':>2} {'代码':<8} {'价格':>9} {'评分':>6} {'技术':>5} {'动量':>5} {'流动':>5} {'基本':>5}"
+    typer.echo("=" * 90)
+    header = (
+        f"{'#':>2} {'代码':<8} {'名称':<10} {'价格':>9} {'评分':>6} "
+        f"{'技术':>5} {'动量':>5} {'流动':>5} {'基本':>5}"
+    )
     typer.echo(header)
-    typer.echo("-" * 78)
+    typer.echo("-" * 90)
     for i, s in enumerate(top_stocks):
+        price = f"{s.price:>9.2f}" if s.price is not None else f"{'-':>9}"
         typer.echo(
-            f"{i + 1:>2} {s.stock_code:<8} {s.price:>9.2f} {s.total_score:>6.1f} "
-            f"{s.technical_score:>5.0f} {s.momentum_score:>5.0f} "
-            f"{s.liquidity_score:>5.0f} {s.fundamental_score:>5.0f}"
+            f"{i + 1:>2} {s.stock_code:<8} {s.name or '-':<10} {price} "
+            f"{s.total_score:>6.1f} {s.technical_score:>5.0f} "
+            f"{s.momentum_score:>5.0f} {s.liquidity_score:>5.0f} "
+            f"{s.fundamental_score:>5.0f}"
         )
-    typer.echo("=" * 78)
-    typer.echo("入选: " + ", ".join(s.stock_code for s in top_stocks))
+    typer.echo("=" * 90)
+    typer.echo(
+        "入选: "
+        + ", ".join(f"{s.stock_code}({s.name})" if s.name else s.stock_code for s in top_stocks)
+    )
 
     if deep and reports:
         typer.echo("\n深度分析:")
@@ -160,18 +170,37 @@ def screen(
             risk = r.risk_result
             sig = risk.signal if risk else "N/A"
             conf = f"{risk.confidence:.0%}" if risk else "N/A"
-            typer.echo(f"  {r.stock_code}: {sig} (信心 {conf})")
+            nm = get_stock_name(r.stock_code)
+            label = f"{r.stock_code}({nm})" if nm else r.stock_code
+            typer.echo(f"  {label}: {sig} (信心 {conf})")
 
     if report:
         lines = [f"# 智能选股 Top {len(top_stocks)}", ""]
         for i, s in enumerate(top_stocks):
+            name = f" {s.name}" if s.name else ""
             lines.append(
-                f"{i + 1}. {s.stock_code} 价格 {s.price:.2f} 评分 {s.total_score:.1f}"
+                f"{i + 1}. {s.stock_code}{name} 价格 {s.price:.2f} 评分 {s.total_score:.1f}"
             )
         out = Path("data/reports") / "screen_result.md"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text("\n".join(lines), encoding="utf-8")
         typer.echo(f"\n[选股报告已保存] {out}")
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# update-names
+# ──────────────────────────────────────────────────────────────────────────
+
+
+@app.command()
+def update_names():
+    """刷新全市场股票代码→名称映射（需联网，写入 data/stock_names.json）"""
+    try:
+        n = update_stock_names()
+        typer.echo(f"[完成] 已更新 {n} 条股票名称到 data/stock_names.json")
+    except Exception as e:  # noqa: BLE001
+        typer.echo(f"[失败] 刷新股票名称失败: {e}", err=True)
+        raise typer.Exit(code=1)
 
 
 # ──────────────────────────────────────────────────────────────────────────

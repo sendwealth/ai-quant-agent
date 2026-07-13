@@ -146,3 +146,19 @@ def test_screen_returns_stock_names():
     d = _scored_stock_to_dict(res.top_stocks[0])
     assert d["name"] == "贵州茅台"
 
+
+def test_full_market_name_resolution():
+    """全市场缓存加载后，即使不在内置池中的代码也能解析名称。"""
+    from quant_agent.screener.stock_names import (
+        CACHE_STOCK_NAME_MAP,
+        get_stock_name,
+    )
+
+    # 缓存应来自 data/stock_names.json（全市场级别，数千条）
+    assert len(CACHE_STOCK_NAME_MAP) > 1000
+    # 这些代码不在内置 DEFAULT_POOL 中，但应在全市场缓存里
+    assert get_stock_name("301269") == "华大九天"
+    assert get_stock_name("688981") == "中芯国际"
+    # 未知代码返回空
+    assert get_stock_name("999999") == ""
+
