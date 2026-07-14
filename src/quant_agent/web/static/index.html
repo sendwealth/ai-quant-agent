@@ -22,7 +22,11 @@
     <section class="panel active" id="tab-analyze">
       <div class="card">
         <form id="analyze-form" class="row">
-          <input id="stock-code" type="text" placeholder="股票代码，如 600519" />
+          <div class="autocomplete">
+            <input id="stock-code" type="text" autocomplete="off"
+                   placeholder="输入代码或名称，如 600519 / 茅台" />
+            <ul id="stock-suggest" class="suggest hidden"></ul>
+          </div>
           <input id="analyze-days" type="number" value="120" min="20" max="500" title="分析天数" />
           <label class="chk"><input type="checkbox" id="analyze-offline" /> 离线</label>
           <label class="chk"><input type="checkbox" id="analyze-chart" checked /> 走势图</label>

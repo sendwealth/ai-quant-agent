@@ -162,3 +162,44 @@ def test_full_market_name_resolution():
     # 未知代码返回空
     assert get_stock_name("999999") == ""
 
+
+def test_search_stocks_function():
+    """search_stocks 支持按代码/名称模糊匹配，并按相关度排序。"""
+    from quant_agent.screener.stock_names import search_stocks
+
+    # 代码精确匹配排最前
+    res = search_stocks("600519", limit=5)
+    assert res and res[0] == {"code": "600519", "name": "贵州茅台"}
+
+    # 按名称匹配
+    res = search_stocks("茅台", limit=5)
+    assert {"code": "600519", "name": "贵州茅台"} in res
+
+    # 代码前缀匹配，返回多条且按代码升序
+    res = search_stocks("600", limit=5)
+    assert len(res) == 5
+    codes = [r["code"] for r in res]
+    assert all(c.startswith("600") for c in codes)
+    assert codes == sorted(codes)
+
+    # 空查询返回空
+    assert search_stocks("", limit=5) == []
+    # 无匹配返回空
+    assert search_stocks("zzzzzz", limit=5) == []
+
+
+def test_search_endpoint(server):
+    """/api/search 返回结构化候选列表。"""
+    import urllib.parse
+
+    q = urllib.parse.quote("茅台")
+    status, body = _get(f"{server}/api/search?q={q}&limit=5")
+    assert status == 200
+    assert isinstance(body["results"], list)
+    assert {"code": "600519", "name": "贵州茅台"} in body["results"]
+
+    # 空查询返回空列表
+    status, body = _get(f"{server}/api/search?q=&limit=5")
+    assert status == 200
+    assert body["results"] == []
+

@@ -68,8 +68,14 @@ class Orchestrator:
     支持 LLM 增强：情感分析、智能指令解析、综合报告生成、风险解读。
     """
 
-    def __init__(self, settings: Optional[Settings] = None):
-        self.settings = settings or get_settings()
+    def __init__(self, settings: Optional[Settings] = None, offline: Optional[bool] = None):
+        base = settings or get_settings()
+        # 复制一份 settings，避免覆盖进程级单例（get_settings 被 lru_cache 缓存）。
+        # offline 为 None 时沿用全局设置；为 True/False 时以运行时参数为准
+        # （Web 端「离线」勾选框按请求实时切换在线/离线）。
+        self.settings = base.model_copy(deep=False)
+        if offline is not None:
+            self.settings.offline_mode = bool(offline)
         self.metrics = MetricsCollector()
         self.data = DataService(self.settings)
 

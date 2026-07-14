@@ -5,6 +5,7 @@
 - JSON API:
     GET  /api/health
     POST /api/analyze        {stock_code, days, offline, chart}
+    GET  /api/search?q=&limit=       股票代码/名称智能搜索
     GET  /api/screen?top=&full_scan=&fundamentals=&deep=
     GET  /api/reports
     GET  /api/report?file=<name>
@@ -21,14 +22,15 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
-from ..config import get_settings
 from ..orchestrator import Orchestrator
+from ..screener.stock_names import search_stocks
 from ..reporting import (
     render_markdown,
     save_report,
@@ -49,12 +51,13 @@ _ORCH_LOCK = threading.Lock()
 
 
 def _get_orchestrator(offline: bool) -> Orchestrator:
-    """惰性获取编排器，按 offline 标志缓存，避免重复初始化数据源。"""
-    if offline:
-        os.environ["QUANT_OFFLINE_MODE"] = "true"
+    """惰性获取编排器，按 offline 标志缓存，避免重复初始化数据源。
+
+    offline 以请求参数为准，实时切换在线/离线（不再依赖进程级环境变量）。
+    """
     with _ORCH_LOCK:
         if offline not in _ORCH_CACHE:
-            _ORCH_CACHE[offline] = Orchestrator()
+            _ORCH_CACHE[offline] = Orchestrator(offline=offline)
         return _ORCH_CACHE[offline]
 
 
@@ -64,19 +67,21 @@ def _get_orchestrator(offline: bool) -> Orchestrator:
 
 
 def health_core() -> dict:
-    settings = get_settings()
-    offline = getattr(settings, "offline_mode", False)
+    offline = False
     llm_enabled = False
+    app_name = ""
     try:
         orch = _get_orchestrator(False)
+        offline = orch.settings.offline_mode
         llm_enabled = bool(orch.llm and orch.llm.enabled)
+        app_name = orch.settings.app_name
     except Exception as e:
-        logger.warning("health llm check failed: %s", e)
+        logger.warning("health check failed: %s", e)
     return {
         "status": "ok",
         "offline_mode": offline,
         "llm_enabled": llm_enabled,
-        "app": settings.app_name,
+        "app": app_name,
     }
 
 
@@ -149,6 +154,13 @@ def screen_core(qs: dict) -> dict:
     }
 
 
+def search_core(qs: dict) -> dict:
+    """按代码/名称模糊搜索股票，返回 {results: [{code, name}]}。"""
+    query = (qs.get("q", [""])[0] or "").strip()
+    limit = int((qs.get("limit", ["10"])[0]) or 10)
+    return {"results": search_stocks(query, limit=limit)}
+
+
 def reports_core() -> dict:
     return {"reports": list_reports(REPORTS_DIR)}
 
@@ -208,12 +220,24 @@ def render_markdown_from_dict(data: dict) -> str:
 # ──────────────────────────────────────────────────────────────────────────
 
 
+def _sanitize(obj):
+    """递归把 NaN/Infinity 等非标准 JSON 值替换为 None，确保浏览器可解析。"""
+    if isinstance(obj, float):
+        return None if (math.isnan(obj) or math.isinf(obj)) else obj
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize(v) for v in obj]
+    return obj
+
+
 def _json_response(handler, payload, status=200):
-    body = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
+    body = json.dumps(_sanitize(payload), ensure_ascii=False, default=str).encode("utf-8")
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
     handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.send_header("Cache-Control", "no-store")
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -246,6 +270,9 @@ def _api_dispatch(handler, path: str, qs: dict) -> bool:
         return True
     if path == "/api/screen":
         _json_response(handler, screen_core(qs))
+        return True
+    if path == "/api/search":
+        _json_response(handler, search_core(qs))
         return True
     if path == "/api/reports":
         _json_response(handler, reports_core())
@@ -280,6 +307,7 @@ def _serve_static(handler, rel_path: str) -> None:
     handler.send_response(200)
     handler.send_header("Content-Type", ctype)
     handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store")
     handler.end_headers()
     handler.wfile.write(body)
 
@@ -293,6 +321,7 @@ def _serve_chart(handler, filename: str) -> None:
     handler.send_response(200)
     handler.send_header("Content-Type", "image/png")
     handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store")
     handler.end_headers()
     handler.wfile.write(body)
 

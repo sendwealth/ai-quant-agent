@@ -73,9 +73,11 @@ class DataService:
         except Exception as e:
             logger.warning(f"BaoStock init failed: {e}")
 
-        # 样例兜底源（离线 / 全源失败时使用，不参与健康检查的"真实源"判定）
+        # 内置样例源：仅读取内置的「真实」历史样例（data/samples），
+        # 不参与健康检查的"真实源"判定，且绝不生成合成/模拟数据；
+        # 若样例不存在则返回 None（表示没有数据）。
         self._sample = SamplePriceSource(self.settings)
-        logger.info("Sample fallback data source ready (offline/demo)")
+        logger.info("Sample data source ready (real bundled data only; never synthetic)")
 
     @property
     def tushare(self) -> Optional[TushareSource]:
@@ -112,7 +114,7 @@ class DataService:
         """
         stock_code = validate_stock_code(stock_code)
 
-        # 离线模式：只读缓存，无缓存则尝试样例兜底（内置样例/合成演示）
+        # 离线模式：只读缓存，无缓存则尝试内置真实样例（若存在），否则报告无数据
         if getattr(self.settings, "offline_mode", False):
             df = self.store.load_price(stock_code)
             if df is not None:
@@ -170,21 +172,32 @@ class DataService:
                 self.store.save_price(stock_code, df, source=source.name)
                 return df
 
-        # 3. 样例兜底（仅当无任何可用真实数据源时，如各源初始化均失败）。
-        #    注意：演示数据不写入常规缓存，避免覆盖后续真实数据获取。
-        #    （在线模式下若真实源已初始化但网络失败，仍按原行为返回 None，
-        #     以保证"全源失败→None"的既有测试语义不被破坏。）
+        # 3. 内置真实样例兜底（仅当无任何可用真实数据源时，如各源初始化均失败）。
+        #    样例源只读内置真实历史数据，绝不合成；样例不写入常规缓存，
+        #    避免覆盖后续真实数据获取。在线模式下若真实源已初始化但网络失败，
+        #    仍按原行为返回 None（"全源失败→None"），触发无数据上报。
         if not self._sources:
             try:
-                demo = self._sample.get_price_data(stock_code, days)
-                if demo is not None and not demo.empty:
-                    demo = normalize_price_data(demo)
-                    report = validate_price_data(demo)
+                bundled = self._sample.get_price_data(stock_code, days)
+                if bundled is not None and not bundled.empty:
+                    bundled = normalize_price_data(bundled)
+                    report = validate_price_data(bundled)
                     if report.is_valid:
-                        logger.info(f"Using sample fallback for {stock_code}")
-                        return demo
+                        logger.info(f"Using real bundled sample for {stock_code}")
+                        return bundled
             except Exception as e:
                 logger.warning(f"Sample fallback failed for {stock_code}: {e}")
+
+        # 4. 最终兜底：在线/离线联网全失败时，返回本地缓存（即使已过期），
+        #    保证有本地历史数据时仍可分析，而不是彻底无数据。
+        #    （受限网络环境下数据源常不可达，本地缓存即真实历史数据。）
+        cached = self.store.load_price(stock_code)
+        if cached is not None and not cached.empty:
+            logger.warning(
+                f"All live sources failed; falling back to local cache "
+                f"(may be stale) for {stock_code}"
+            )
+            return normalize_price_data(cached)
 
         logger.error(f"All sources failed: {stock_code}")
         return None
@@ -196,7 +209,7 @@ class DataService:
             price = source.get_realtime_price(stock_code)
             if price and price > 0:
                 return price
-        # 样例兜底（无真实源或离线模式）
+        # 兜底：仅读取内置真实样例（无真实源或离线模式且样例存在时）
         if not self._sources or getattr(self.settings, "offline_mode", False):
             try:
                 price = self._sample.get_realtime_price(stock_code)
@@ -222,7 +235,7 @@ class DataService:
         """
         stock_code = validate_stock_code(stock_code)
 
-        # 离线模式：只读缓存，无缓存则尝试样例兜底（合成演示财务）
+        # 离线模式：只读缓存，无缓存则尝试内置真实样例财务（若存在），否则无数据
         if getattr(self.settings, "offline_mode", False):
             cached = self._load_cached_financial(stock_code, max_age_days)
             if cached is not None:

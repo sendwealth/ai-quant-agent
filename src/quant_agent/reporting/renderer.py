@@ -48,6 +48,32 @@ def _agent_block(result: Optional[AgentResult], title: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _no_data_banner(report: AnalysisReport) -> str:
+    """若核心数据缺失，返回醒目的警示横幅；否则返回空串。"""
+    missing = []
+    if report.technical_result and report.technical_result.error == "NO_DATA":
+        missing.append("行情")
+    if report.fundamental_result and report.fundamental_result.error == "NO_DATA":
+        missing.append("财务")
+    if report.sentiment_result and report.sentiment_result.error == "NO_DATA":
+        missing.append("新闻")
+    if not missing:
+        return ""
+    items = "、".join(missing)
+    if "行情" in missing:
+        # 完全没有行情 → 无法做技术分析
+        return (
+            "> ⚠️ **无可用数据**：当前缺少" + items + "数据，无法进行有效分析。\n"
+            "> 以下结论基于缺失数据得出，**不构成任何投资建议**。\n"
+            "> 请联网获取数据或检查本地缓存后重试。\n"
+        )
+    # 仅财务/新闻缺失 → 技术面仍为真实行情，结论仅供参考
+    return (
+        "> ⚠️ **部分数据缺失**：当前缺少" + items + "数据。\n"
+        "> 技术面分析基于本地真实行情，结论**仅供参考**，不构成投资建议。\n"
+    )
+
+
 def render_markdown(report: AnalysisReport) -> str:
     """渲染为 Markdown 报告"""
     r = report.risk_result
@@ -55,11 +81,17 @@ def render_markdown(report: AnalysisReport) -> str:
     conf = _fmt_pct(r.confidence if r else 0.0)
     pos = _fmt_pct(r.metrics.get("position", 0.0) if r else 0.0)
 
+    banner = _no_data_banner(report)
     parts = [
         f"# 量化分析报告 — {report.stock_code}",
         "",
         f"> 生成时间: {report.timestamp}",
         "",
+    ]
+    if banner:
+        parts.append(banner)
+        parts.append("")
+    parts += [
         "## 综合结论",
         "",
         f"- **最终信号**: {signal}",

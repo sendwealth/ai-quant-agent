@@ -79,7 +79,7 @@ async function api(path, opts) {
 async function health() {
   try {
     const d = await api("/api/health");
-    const llm = d.llm_enabled ? "LLM 已启用" : "离线规则增强";
+    const llm = d.llm_enabled ? "LLM 已启用" : "规则增强(无 LLM)";
     setStatus(true, `就绪 · ${llm}${d.offline_mode ? " · 离线" : ""}`);
   } catch (e) {
     setStatus(false, "服务未连接");
@@ -102,13 +102,23 @@ $("#analyze-form").addEventListener("submit", async (e) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ stock_code: code, days, offline, chart }),
     });
-    const sig = (d.report.signal || "HOLD");
-    let html = `<div class="report-card">${renderMarkdown(d.markdown)}</div>`;
+    if (d.error) throw new Error(d.error);
+    const rep = d.report || {};
+    const sig = (rep.signal || "HOLD");
+    let md = d.markdown;
+    if (!md) {
+      if (rep && Object.keys(rep).length) {
+        md = `# 量化分析报告 — ${rep.stock_code || ""}\n\n> Markdown 渲染内容为空，已用基础数据兜底。\n\n` +
+             `## 综合结论\n\n- **最终信号**: ${sig}\n- **信心度**: ${rep.confidence ?? "?"}\n- **建议仓位**: ${rep.position_pct ?? "?"}%\n`;
+      } else {
+        md = "_（无报告内容）_";
+      }
+    }
+    let html = `<div class="report-card">${renderMarkdown(md)}</div>`;
     if (d.chart_url) {
       html += `<img class="chart-img" src="${d.chart_url}" alt="走势图" />`;
     }
     box.innerHTML = html;
-    box.querySelectorAll("h1").forEach((h) => {});
     toast(`分析完成：${sig}`);
   } catch (e) {
     box.innerHTML = `<div class="error-box">分析失败：${escapeHtml(e.message)}</div>`;
@@ -121,6 +131,79 @@ document.querySelectorAll(".quick a").forEach((a) => {
     $("#analyze-form").requestSubmit();
   });
 });
+
+// ── 股票智能搜索（自动补全）──
+(function setupAutocomplete() {
+  const input = $("#stock-code");
+  const box = $("#stock-suggest");
+  let items = [];       // 当前候选 [{code, name}]
+  let active = -1;      // 高亮索引
+  let timer = null;     // 防抖计时器
+  let seq = 0;          // 请求序号，避免乱序覆盖
+
+  const hide = () => { box.classList.add("hidden"); box.innerHTML = ""; items = []; active = -1; };
+
+  function render() {
+    if (!items.length) { hide(); return; }
+    box.innerHTML = items
+      .map((s, i) => `
+        <li class="suggest-item${i === active ? " active" : ""}" data-i="${i}">
+          <span class="s-code">${escapeHtml(s.code)}</span>
+          <span class="s-name">${escapeHtml(s.name || "")}</span>
+        </li>`)
+      .join("");
+    box.classList.remove("hidden");
+  }
+
+  function choose(i) {
+    const s = items[i];
+    if (!s) return;
+    input.value = s.code;
+    hide();
+    $("#analyze-form").requestSubmit();
+  }
+
+  async function search(q) {
+    const mySeq = ++seq;
+    try {
+      const d = await api("/api/search?q=" + encodeURIComponent(q) + "&limit=10");
+      if (mySeq !== seq) return; // 已有更新的请求，丢弃旧结果
+      items = d.results || [];
+      active = -1;
+      render();
+    } catch (e) {
+      hide();
+    }
+  }
+
+  input.addEventListener("input", () => {
+    const q = input.value.trim();
+    clearTimeout(timer);
+    if (!q) { hide(); return; }
+    timer = setTimeout(() => search(q), 180);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (box.classList.contains("hidden") || !items.length) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault(); active = (active + 1) % items.length; render();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault(); active = (active - 1 + items.length) % items.length; render();
+    } else if (e.key === "Enter") {
+      if (active >= 0) { e.preventDefault(); choose(active); }
+    } else if (e.key === "Escape") {
+      hide();
+    }
+  });
+
+  box.addEventListener("mousedown", (e) => {
+    // mousedown 先于 blur，避免下拉在点击前消失
+    const li = e.target.closest(".suggest-item");
+    if (li) { e.preventDefault(); choose(+li.dataset.i); }
+  });
+
+  input.addEventListener("blur", () => setTimeout(hide, 120));
+})();
 
 // ── 智能选股 ──
 $("#screen-form").addEventListener("submit", async (e) => {

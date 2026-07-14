@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +93,45 @@ STOCK_NAME_MAP: Dict[str, str] = {**BUILTIN_STOCK_NAME_MAP, **CACHE_STOCK_NAME_M
 def get_stock_name(code: str) -> str:
     """返回股票名称，未知时返回空字符串。"""
     return STOCK_NAME_MAP.get(code, "")
+
+
+def search_stocks(query: str, limit: int = 10) -> List[Dict[str, str]]:
+    """按代码或名称模糊搜索股票，返回 ``[{"code", "name"}, ...]``。
+
+    匹配与排序规则（相关度由高到低）：
+
+    1. 代码完全相等
+    2. 代码以 query 前缀开头
+    3. 名称以 query 前缀开头
+    4. 代码包含 query
+    5. 名称包含 query
+
+    query 为空时返回空列表。搜索大小写不敏感、忽略首尾空白。
+    """
+    q = (query or "").strip()
+    if not q:
+        return []
+    q_lower = q.lower()
+
+    scored: List[tuple[int, str, str]] = []
+    for code, name in STOCK_NAME_MAP.items():
+        name_lower = name.lower()
+        rank: int | None = None
+        if code == q:
+            rank = 0
+        elif code.startswith(q):
+            rank = 1
+        elif name.startswith(q):
+            rank = 2
+        elif q_lower in code.lower():
+            rank = 3
+        elif q_lower in name_lower:
+            rank = 4
+        if rank is not None:
+            scored.append((rank, code, name))
+
+    scored.sort(key=lambda x: (x[0], x[1]))
+    return [{"code": c, "name": n} for _, c, n in scored[: max(1, limit)]]
 
 
 def update_stock_names(path: Path = _DEFAULT_CACHE) -> int:

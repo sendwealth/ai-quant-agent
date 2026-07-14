@@ -80,6 +80,25 @@ input[type="text"], input[type="number"] {
 input[type="number"] { width: 90px; }
 #stock-code { width: 200px; }
 
+/* 股票搜索自动补全 */
+.autocomplete { position: relative; display: inline-block; }
+.suggest {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 20;
+  width: 260px; max-height: 300px; overflow-y: auto; margin: 0; padding: 0.25rem;
+  list-style: none; background: var(--bg-soft); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 12px 32px #0009;
+}
+.suggest.hidden { display: none; }
+.suggest-item {
+  display: flex; align-items: baseline; gap: 0.6rem;
+  padding: 0.4rem 0.6rem; border-radius: 6px; cursor: pointer;
+}
+.suggest-item:hover, .suggest-item.active { background: var(--accent); }
+.suggest-item .s-code { color: #93c5fd; font-variant-numeric: tabular-nums; min-width: 60px; }
+.suggest-item:hover .s-code, .suggest-item.active .s-code { color: #fff; }
+.suggest-item .s-name { color: var(--text); font-size: 0.9rem; }
+.suggest-item:hover .s-name, .suggest-item.active .s-name { color: #fff; }
+
 .chk { display: inline-flex; align-items: center; gap: 0.3rem; color: var(--muted); font-size: 0.9rem; }
 
 .btn {
