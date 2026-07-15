@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     # ── 并发 ──
     fetch_max_workers: int = 5
 
+    # ── 交易持久化 ──
+    # 为 True 时，实盘组合状态由 PaperTradingService 托管并落盘，
+    # 进程重启不丢状态。默认 False（纯内存，便于测试/预览）。
+    persist_trading: bool = False
+
     # ── 离线 & 预下载 ──
     offline_mode: bool = False
     preload_stocks: str = "300750,002475,601318,600276,000858,600519"

@@ -95,7 +95,9 @@ def analyze_core(params: dict) -> dict:
     want_chart = bool(params.get("chart", False))
 
     orch = _get_orchestrator(offline)
-    result = orch.analyze(stock_code, days=days)
+    # 默认只读预览：分析但不下单，避免「点一下分析就建仓」。
+    # 需要真正交易时调用 /api/execute（execute=True）。
+    result = orch.analyze(stock_code, days=days, execute=False)
 
     try:
         save_report(result, base_dir=REPORTS_DIR)
@@ -151,6 +153,34 @@ def screen_core(qs: dict) -> dict:
     return {
         "top_stocks": [_scored_stock_to_dict(s) for s in screen_result.top_stocks],
         "deep_reports": deep_reports,
+    }
+
+
+def execute_core(params: dict) -> dict:
+    """显式交易入口：基于分析结果真正下单（execute=True）。
+
+    参数同 analyze_core（stock_code, days, offline）。返回下单后的报告。
+    Web 的「分析」按钮默认只预览；需要建仓/平仓时调用此端点。
+    """
+    stock_code = (params.get("stock_code") or "").strip()
+    if not stock_code:
+        raise ValueError("请提供 stock_code")
+    days = int(params.get("days", 120) or 120)
+    offline = bool(params.get("offline", False))
+
+    orch = _get_orchestrator(offline)
+    result = orch.analyze(stock_code, days=days, execute=True)
+
+    try:
+        save_report(result, base_dir=REPORTS_DIR)
+    except Exception as e:
+        logger.warning("保存历史失败: %s", e)
+
+    return {
+        "stock_code": result.stock_code,
+        "executed": result.risk_result.signal if result.risk_result else "HOLD",
+        "markdown": render_markdown(result),
+        "report": result.to_dict(),
     }
 
 
@@ -267,6 +297,12 @@ def _api_dispatch(handler, path: str, qs: dict) -> bool:
             _error(handler, "仅支持 POST", status=405)
             return True
         _json_response(handler, analyze_core(_read_json_body(handler)))
+        return True
+    if path == "/api/execute":
+        if handler.command != "POST":
+            _error(handler, "仅支持 POST", status=405)
+            return True
+        _json_response(handler, execute_core(_read_json_body(handler)))
         return True
     if path == "/api/screen":
         _json_response(handler, screen_core(qs))

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from ..audit import AuditLogger
 from ..portfolio import CommissionModel, Portfolio, Position
+from ..execution.paper_trading import PaperTradingService
 from .base import BaseAgent, AgentResult
 
 if TYPE_CHECKING:
@@ -49,6 +50,7 @@ class ExecutionAgent(BaseAgent):
         min_commission: float = 5.0,
         settings: Optional["Settings"] = None,
         audit_logger: Optional[AuditLogger] = None,
+        persist_dir: Optional[str] = None,
         **kwargs,
     ):
         super().__init__(name="execution", **kwargs)
@@ -65,15 +67,30 @@ class ExecutionAgent(BaseAgent):
         self._default_take_profit = settings.default_take_profit_2 if settings else 0.20
         self.audit_logger = audit_logger
 
-        self._portfolio = Portfolio(
-            cash=initial_capital,
-            commission=CommissionModel(
-                commission_rate=cr,
-                stamp_tax_rate=sr,
-                min_commission=min_commission,
-            ),
-            auto_round=True,
-        )
+        # 持久化：若提供 persist_dir，则组合状态由 PaperTradingService 托管，
+        # 每次成交后写入磁盘，进程重启不丢状态。默认 None（纯内存，测试无副作用）。
+        self._paper: Optional[PaperTradingService] = None
+        if persist_dir is not None:
+            self._paper = PaperTradingService(
+                data_dir=persist_dir,
+                initial_capital=initial_capital,
+                commission=CommissionModel(
+                    commission_rate=cr,
+                    stamp_tax_rate=sr,
+                    min_commission=min_commission,
+                ),
+            )
+            self._portfolio = self._paper.portfolio
+        else:
+            self._portfolio = Portfolio(
+                cash=initial_capital,
+                commission=CommissionModel(
+                    commission_rate=cr,
+                    stamp_tax_rate=sr,
+                    min_commission=min_commission,
+                ),
+                auto_round=True,
+            )
         self.orders: list[Order] = []
         self.trade_log: list[dict] = []
         self.equity_history: list[dict] = []
@@ -294,6 +311,7 @@ class ExecutionAgent(BaseAgent):
         self._log_trade(order)
         self._log_action("order_filled", stock_code=stock_code, signal="BUY",
                          direction="buy", shares=actual_shares, price=price)
+        self._persist()
         return order
 
     def _sell(self, stock_code: str, price: float, reason: str = "SIGNAL") -> Optional[Order]:
@@ -314,6 +332,7 @@ class ExecutionAgent(BaseAgent):
         self._log_action("order_filled", stock_code=stock_code, signal="SELL",
                          direction="sell", shares=shares, price=price,
                          reason=reason, pnl=pos.pnl)
+        self._persist()
         return order
 
     def _log_trade(self, order: Order, reason: str = ""):
@@ -327,3 +346,11 @@ class ExecutionAgent(BaseAgent):
             "status": order.status,
             "reason": reason,
         })
+
+    def _persist(self) -> None:
+        """成交后持久化组合状态（仅当启用 ``persist_dir`` 时）。
+
+        内存模式下 ``self._paper`` 为 ``None``，跳过持久化（测试零副作用）。
+        """
+        if self._paper is not None:
+            self._paper.save_state()

@@ -1,11 +1,21 @@
-"""CLI 入口 — 完整量化分析流水线"""
+"""CLI 入口 — 完整量化分析流水线（已弃用）
+
+.. deprecated::
+    此模块为旧版入口，仅保留向后兼容。新代码请使用 Typer 版 CLI：
+
+        quant-agent analyze 600519
+
+    对应实现见 :mod:`quant_agent.cli`。
+"""
 
 import logging
+import warnings
 
 from quant_agent.orchestrator import Orchestrator, AnalysisReport
 
 
 def run_pipeline(stock_code: str = "300750", days: int = 250) -> dict:
+    """完整分析 + 执行流水线（旧版包装器，已弃用，请改用 quant-agent CLI）。"""
     """完整分析 + 执行流水线
 
     向后兼容的包装器：内部委托给 Orchestrator.analyze()。

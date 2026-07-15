@@ -24,6 +24,7 @@ from .agents.risk import RiskAgent
 from .agents.execution import ExecutionAgent, Order
 from .notification.email import EmailNotifier
 from .observability.metrics import MetricsCollector, HealthChecker
+from .trading.service import TradingService
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +111,7 @@ class Orchestrator:
             initial_capital=self.settings.initial_capital,
             settings=self.settings,
             audit_logger=self.audit_logger,
+            persist_dir=self.settings.data_dir if self.settings.persist_trading else None,
         )
 
         # LLM 报告生成器
@@ -119,6 +121,13 @@ class Orchestrator:
 
         # 邮件通知
         self.notifier = EmailNotifier(self.settings)
+
+        # 交易执行服务（显式触发，与分析解耦）
+        self.trading = TradingService(
+            execution=self.execution,
+            risk=self.risk,
+            notifier=self.notifier,
+        )
 
         # 选股引擎 (lazy — only instantiated when needed)
         self._screener = None
@@ -158,12 +167,15 @@ class Orchestrator:
         """Wrapper for batch analysis that propagates exceptions."""
         return self.analyze(code, days)
 
-    def analyze(self, stock_code: str, days: int = 120) -> AnalysisReport:
+    def analyze(self, stock_code: str, days: int = 120, execute: bool = True) -> AnalysisReport:
         """运行完整分析流水线
 
         Args:
             stock_code: A 股代码 (6 位数字, 沪深创北)
             days: 分析天数 (默认 120)
+            execute: 是否根据共识信号显式下单。
+                默认 True（CLI/批量等显式操作）；Web 预览等只读场景应传 False，
+                避免「点一下分析就建仓」。
 
         Returns:
             AnalysisReport 包含各 Agent 的分析结果
@@ -253,61 +265,14 @@ class Orchestrator:
                 except LLMError as e:
                     logger.warning("LLM 风险解读失败: %s", e)
 
-            # d. Check stop-loss/take-profit on existing positions BEFORE new trades
-            for code in list(self.execution.positions.keys()):
-                pos = self.execution.positions[code]
-                stop_order = self.execution.check_stop_conditions(code, pos.current_price)
-                if stop_order:
-                    logger.warning("  Stop triggered for %s: %s %d @ %.2f",
-                                   code, stop_order.direction, stop_order.shares, stop_order.filled_price)
-                    self.risk.t1_tracker.clear(code)
+            # d~e. 仅当显式要求时才执行交易（默认从 Web 预览入口为 False，
+            # 避免「点一下分析就建仓」）。交易副作用全部交由 TradingService。
+            if execute:
+                self.trading.execute(report, analysis_results, current_date)
+                if risk_result.signal in ("BUY", "SELL"):
+                    self.notifier.send_trade_signal(report)
 
-            # e. 执行 (仅在 risk 信号为 BUY/SELL 时)
-            position_pct = risk_result.metrics.get("position", 0.0)
-            current_price = 0.0
-            for r in analysis_results:
-                if current_price > 0:
-                    break
-                for key in ("current_price", "price"):
-                    val = r.metrics.get(key)
-                    if val is not None and val > 0:
-                        current_price = float(val)
-                        break
-
-            all_results = analysis_results + [risk_result]
-
-            if risk_result.signal == "BUY" and position_pct > 0 and current_price > 0:
-                order = self.execution.execute_signal(
-                    stock_code, "BUY",
-                    position_pct=position_pct,
-                    current_price=current_price,
-                    stop_loss_pct=risk_result.metrics.get("stop_loss", -0.08),
-                    take_profit_pct=risk_result.metrics.get("take_profit_2", 0.20),
-                    agent_results=all_results,
-                )
-                if order and order.status == "filled":
-                    logger.info("  BUY executed: %s %d shares @ %.2f", stock_code, order.shares, order.filled_price)
-                    # Record buy for T+1 enforcement
-                    self.risk.t1_tracker.record_buy(stock_code, current_date)
-            elif risk_result.signal == "SELL":
-                order = self.execution.execute_signal(
-                    stock_code, "SELL",
-                    current_price=current_price,
-                    agent_results=all_results,
-                )
-                if order and order.status == "filled":
-                    logger.info("  SELL executed: %s %d shares @ %.2f", stock_code, order.shares, order.filled_price)
-                    self.risk.t1_tracker.clear(stock_code)
-            else:
-                self.execution.execute_signal(
-                    stock_code, risk_result.signal,
-                    position_pct=position_pct,
-                    current_price=current_price,
-                    agent_results=all_results,
-                )
-                logger.info("  No trade (signal=%s)", risk_result.signal)
-
-            # e. 组合状态
+            # 组合状态（始终读取，便于预览展示；只读不写）
             summary = self.execution.get_summary()
             report.summary = summary
         logger.info("")
@@ -334,10 +299,6 @@ class Orchestrator:
         logger.info("")
         logger.info("Health: %s", "OK" if health_status["healthy"] else "FAIL")
         logger.info("Pipeline complete (agents use structured logging)")
-
-        # 邮件通知 (BUY/SELL 信号)
-        if report.risk_result and report.risk_result.signal in ("BUY", "SELL"):
-            self.notifier.send_trade_signal(report)
 
         return report
 

@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from ..portfolio import CommissionModel, Portfolio, Trade, round_shares
+from ..strategy.strategy import Strategy, StrategyContext
 
 logger = logging.getLogger(__name__)
 
@@ -76,28 +77,41 @@ class BacktestEngine:
         initial_capital: float = 100000.0,
         commission: Optional[CommissionModel] = None,
         slippage: Optional[SlippageModel] = None,
+        strategy: Optional[Strategy] = None,
     ):
         self.initial_capital = initial_capital
         self.commission = commission or CommissionModel()
         self.slippage = slippage or SlippageModel()
+        self.strategy = strategy
 
     def run(
         self,
         price_data: pd.DataFrame,
-        signals: pd.Series,
+        signals: Optional[pd.Series] = None,
         benchmark: Optional[pd.Series] = None,
+        strategy: Optional[Strategy] = None,
     ) -> BacktestResult:
         """Run backtest.
 
         Args:
             price_data: OHLCV data (columns: date, close, ...)
-            signals: Signal series (1=buy, -1=sell, 0=hold), aligned to price_data
+            signals: Signal series (1=buy, -1=sell, 0=hold), aligned to price_data.
+                     Ignored when a *strategy* is provided.
             benchmark: Benchmark return series (optional)
+            strategy: Optional :class:`Strategy` that generates signals per day.
+                      When given, the backtest reuses the SAME strategy abstraction
+                      as the live pipeline, decoupling signal logic from the
+                      trade simulator.  (e.g. ``CrossOverStrategy`` for a momentum
+                      backtest, or a custom strategy.)
 
         Returns:
             BacktestResult
         """
+        active_strategy = strategy or self.strategy
         if price_data.empty:
+            return BacktestResult()
+        if active_strategy is None and signals is None:
+            logger.warning("Backtest requires either `signals` or a `strategy`")
             return BacktestResult()
 
         # Normalize column names
@@ -112,19 +126,34 @@ class BacktestEngine:
         stock_code = "STOCK"
 
         # Align signals and prices
-        min_len = min(len(price_data), len(signals))
+        signal_len = len(signals) if signals is not None else len(price_data)
+        min_len = min(len(price_data), signal_len)
         dates = price_data["date"].iloc[:min_len]
         closes = price_data["close"].iloc[:min_len]
-        signal_values = signals.iloc[:min_len] if isinstance(signals, pd.Series) else signals
+        signal_values = (
+            signals.iloc[:min_len] if (signals is not None and isinstance(signals, pd.Series))
+            else None
+        )
 
         prev_signal = 0
+        prev_price = None
+        has_position = False
 
         for i in range(min_len):
             date = str(dates.iloc[i])
             price = float(closes.iloc[i])
-            sig = int(signal_values.iloc[i]) if not pd.isna(signal_values.iloc[i]) else 0
-
             portfolio.update_price(stock_code, price)
+
+            # 决定当日信号：优先用注入的 Strategy，否则用 signals 序列
+            if active_strategy is not None:
+                ctx = StrategyContext(
+                    price=price, prev_price=prev_price, has_position=has_position
+                )
+                s = active_strategy.generate_signal(ctx)
+                sig = 1 if s.signal == "BUY" else (-1 if s.signal == "SELL" else 0)
+            else:
+                sv = signal_values.iloc[i] if signal_values is not None else 0
+                sig = int(sv) if not pd.isna(sv) else 0
 
             if sig == 1 and prev_signal != 1:
                 shares = int(portfolio.cash / price)
@@ -139,6 +168,8 @@ class BacktestEngine:
                 portfolio.sell(stock_code, exec_price, pos.shares)
 
             prev_signal = sig
+            prev_price = price
+            has_position = stock_code in portfolio.positions
             portfolio.record_equity()
 
         # Liquidate remaining positions

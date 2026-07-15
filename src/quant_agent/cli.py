@@ -74,6 +74,7 @@ def analyze(
     fmt: str = typer.Option("md", "--format", help="报告格式: md / html"),
     chart: bool = typer.Option(False, "--chart/--no-chart", help="生成价格走势图"),
     offline: bool = typer.Option(False, "--offline", help="离线模式（仅用本地/样例数据）"),
+    execute: bool = typer.Option(True, "--execute/--no-execute", help="根据共识信号显式下单（默认下单；预览用 --no-execute）"),
     out_dir: str = typer.Option("data/reports", "--out-dir", help="报告输出目录"),
 ):
     """单股深度分析"""
@@ -81,7 +82,7 @@ def analyze(
         os.environ["QUANT_OFFLINE_MODE"] = "true"
 
     orch = _build_orchestrator()
-    result = orch.analyze(stock_code, days=days)
+    result = orch.analyze(stock_code, days=days, execute=execute)
 
     _print_report_block(result)
 

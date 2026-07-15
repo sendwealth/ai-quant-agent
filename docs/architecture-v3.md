@@ -1107,14 +1107,14 @@ v3.0 重构的核心思想：
 
 | 模块 | 阶段 | 说明 |
 |---|---|---|
-| Async EventBus + Redis | Phase 2 | 当前为内存同步 |
-| PlannerAgent (LLM) | Phase 2 | 未实现 |
+| Async EventBus + Redis | Phase 2 | 当前为内存同步（EventBus 已实现并有单测，但**尚未接入**编排链路） |
+| PlannerAgent (LLM) | Phase 2 | 已实现，但仅做「自然语言 → 股票代码」解析，非拓扑编排 |
 | ResearchAgent (RAG) | Phase 3 | 未实现 |
-| SentimentAgent | Phase 3 | 未实现 |
-| MCP 工具协议 | Phase 3 | 空 `__init__.py` |
-| 记忆系统 | Phase 3 | 空 `__init__.py` |
-| 真实交易执行 | Phase 3 | 未实现 |
-| 异步数据获取 | Phase 2 | 整个数据层同步 |
+| SentimentAgent | Phase 3 | 已实现（情感/情绪分析） |
+| MCP 工具协议 | 规划中 | **模块已移除**（原为空 `__init__.py`）；工具经 Agent/Service 直接暴露 |
+| 记忆系统 (RAG) | 规划中 | **模块已移除**（原为空 `__init__.py`） |
+| 真实交易执行 | Phase 3 | ✅ 已落地：ExecutionAgent + PaperTradingService（落盘，可经 `persist_trading` 开启） |
+| 异步数据获取 | Phase 2 | 整个数据层同步（线程池加速） |
 | 数据源熔断器 | Phase 2 | 未实现 |
 
 ---
@@ -1194,3 +1194,72 @@ v3.0 重构的核心思想：
 - 新增 `tests/unit/test_web.py`：进程内启动 HTTP 服务 + `urllib` 请求，
   覆盖 health / analyze(含图表) / reports / report show / 404 / 静态资源，**6 passed**。
 - 全量测试 **502 passed**（496 + 6）。
+
+---
+
+## 六、v3.3 架构重定义（已实现）
+
+在保持全部既有测试通过的前提下，对顶层架构做了**减法与解耦**，纠正了
+"分析"与"交易"被焊死在同一条调用链里这一根本性设计缺陷。
+
+### 6.1 核心改动
+
+**1. 分析 / 执行解耦（`Orchestrator.analyze`）**
+- `analyze(stock_code, days, execute: bool = True)`：分析本身为**纯只读**，
+  仅产出 `AnalysisReport`（信号 + 仓位建议）。
+- 仅在 `execute=True` 时才显式下单。Web 的 `/api/analyze` 默认
+  `execute=False`（**点一下分析不再建仓**），新增 `/api/execute` 专用于真正交易。
+- 副作用（下单/邮件/记录 T+1）全部从 `analyze` 抽出，移入 `TradingService`。
+
+**2. Strategy 成为一等公民（`strategy/strategy.py`）**
+- 抽出 `Strategy` 协议：`generate_signal(ctx: StrategyContext) -> Signal`。
+- `ConsensusStrategy`：复刻原 `RiskAgent` 的「分析师共识 → 信号 + 仓位」逻辑，
+  由 `RiskAgent` 委托（行为与原先**完全一致**）。T+1、日亏损熔断等组合级
+  风控约束仍留在 `RiskAgent`（风控 ≠ 策略）。
+- `BacktestEngine.run(..., strategy=...)` 现可注入同一套 `Strategy` 抽象，
+  `CrossOverStrategy` 作为回测示例。实盘与回测因此共用同一信号生成语义。
+
+**3. 交易执行持久化（`ExecutionAgent` + `PaperTradingService`）**
+- `ExecutionAgent(persist_dir=...)` 可将组合状态托管给 `PaperTradingService`，
+  每次成交后原子落盘，**进程重启不丢状态**。
+- 由 `Settings.persist_trading`（默认 `False`）开关，默认内存模式，**测试零副作用**。
+
+### 6.2 目标分层（实现后）
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  接入层   CLI / Web / Scheduler  (只调 Service，不碰 Agent)      │
+└───────────────────────┬──────────────────────────────────────┘
+                        │
+┌───────────────────────▼──────────────────────────────────────┐
+│  应用服务层                                                    │
+│  ┌────────────────┐   ┌────────────────┐   ┌────────────────┐ │
+│  │ AnalysisService │   │ TradingService  │   │ BacktestService│ │
+│  │ (纯只读, 幂等)   │   │ (显式下单/持久化) │   │                │ │
+│  └───────┬────────┘   └───────┬────────┘   └──────┬─────────┘ │
+│          │                    │                   │          │
+│          │         ┌──────────▼──────────┐        │          │
+│          │         │   Strategy (接口)    │◀───────┘          │
+│          │         │ generate_signal(ctx) │ 回测&实盘共用       │
+│          │         └─────────────────────┘                    │
+└──────────┼───────────────────────────────────────────────────┘
+           │
+┌──────────▼───────────────────────────────────────────────────┐
+│  领域层  Analyst Agents / RiskEngine（共识+仓位由 Strategy 提供） │
+└──────────┬───────────────────────────────────────────────────┘
+           │
+┌──────────▼───────────────────────────────────────────────────┐
+│  基础设施  DataService │ Portfolio │ PaperTradingService │ LLM  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 6.3 落地优先级回顾
+
+| 优先级 | 动作 | 状态 |
+|---|---|---|
+| 1 | 拆分 analyze：分析只读 + 交易显式触发 | ✅ |
+| 2 | 抽出 Strategy 接口，回测与实盘共用 | ✅ |
+| 3 | 统一执行到 PaperTradingService（可持久化） | ✅ |
+| 4 | 清理死代码（mcp/、memory/、baostock.py.bak） | ✅ |
+| 5 | 文档与实现对齐 | ✅ |
+| 6 | async 化数据/LLM 层 | 后续演进项 |

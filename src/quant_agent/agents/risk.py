@@ -10,11 +10,11 @@ Enhanced risk management:
 from __future__ import annotations
 
 import logging
-import statistics
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Optional
 
+from ..strategy.strategy import ConsensusStrategy, StrategyContext
 from .base import BaseAgent, AgentResult
 
 if TYPE_CHECKING:
@@ -101,6 +101,7 @@ class RiskAgent(BaseAgent):
         max_daily_loss_pct: float | None = None,
         settings: Optional["Settings"] = None,
         llm_client: Optional["LLMClient"] = None,
+        strategy=None,
         **kwargs,
     ):
         super().__init__(name="risk", **kwargs)
@@ -123,6 +124,13 @@ class RiskAgent(BaseAgent):
             settings.max_daily_loss_pct if settings else -0.03
         ))
         self._llm = llm_client
+        # 策略层：共识 → 信号 + 仓位（默认 ConsensusStrategy，与原逻辑等价）
+        self.strategy = strategy or ConsensusStrategy(
+            max_position=self.max_position,
+            stop_loss=self.stop_loss,
+            take_profit_1=self.take_profit_1,
+            take_profit_2=self.take_profit_2,
+        )
         self.t1_tracker = T1Tracker()
         self.daily_tracker = DailyPnLTracker(max_daily_loss_pct=self.max_daily_loss_pct)
 
@@ -167,30 +175,25 @@ class RiskAgent(BaseAgent):
                 success=False,
             )
 
-        buy_count = sum(1 for r in successful if r.signal == "BUY")
-        sell_count = sum(1 for r in successful if r.signal == "SELL")
-        hold_count = sum(1 for r in successful if r.signal == "HOLD")
+        # 2~3. 策略层：共识信号 + 建议仓位（委托给可插拔 Strategy）
+        base = self.strategy.generate_signal(StrategyContext(
+            results=results,
+            current_positions=current_positions,
+            current_equity=current_equity,
+            current_date=current_date,
+        ))
+        consensus = base.signal
+        avg_confidence = base.confidence
+        position = base.position_pct
+        buy_count = base.metrics.get("buy_count", 0)
+        sell_count = base.metrics.get("sell_count", 0)
+        hold_count = base.metrics.get("hold_count", 0)
 
-        # 平均信心度（仅成功的分析）
-        confidences = [r.confidence for r in successful if r.confidence > 0]
-        avg_confidence = statistics.mean(confidences) if confidences else 0.0
-
-        # 2. 共识信号
-        if buy_count >= len(successful) * 0.6:
-            consensus = "BUY"
-        elif sell_count >= len(successful) * 0.6:
-            consensus = "SELL"
-        else:
-            consensus = "HOLD"
-
-        # 3. 仓位计算
-        position = 0.0
         position_warnings: list[str] = []
 
+        # 3a. Portfolio heat check — reduce position if portfolio is heavily invested.
+        #      (组合级风控约束，保留在原风控层而非策略层)
         if consensus == "BUY":
-            position = self.max_position * avg_confidence
-
-            # 3a. Portfolio heat check — reduce position if portfolio is heavily invested
             if current_positions and current_equity and current_equity > 0:
                 total_position_pct = sum(current_positions.values()) / current_equity
                 available_pct = self.max_portfolio_risk - total_position_pct
@@ -201,13 +204,13 @@ class RiskAgent(BaseAgent):
                     )
                 else:
                     position = min(position, available_pct)
-
             position = min(self.max_position, position)
 
         # 4. T+1 enforcement for SELL
         if consensus == "SELL":
             if not self.t1_tracker.can_sell(stock_code, current_date):
                 consensus = "HOLD"
+                position = 0.0
                 position_warnings.append(
                     f"T+1 限制: {stock_code} 当日买入不可卖出，信号降级为 HOLD"
                 )
