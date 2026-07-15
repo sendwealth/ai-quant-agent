@@ -4,19 +4,20 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-from .base import BaseAgent, AgentResult
 from ..llm.client import LLMClient, LLMError
 from ..llm.prompts import SENTIMENT_SYSTEM, SENTIMENT_USER
+from .base import AgentResult, BaseAgent
 
 logger = logging.getLogger(__name__)
 
 
 class SentimentResponse(BaseModel):
     """Structured output schema for LLM sentiment analysis."""
+
     signal: str = Field(description="BUY, SELL, or HOLD")
     confidence: float = Field(ge=0.0, le=1.0, description="Confidence score 0-1")
     sentiment_score: float = Field(ge=-1.0, le=1.0, description="Sentiment score -1 to 1")
@@ -209,7 +210,7 @@ class SentimentAgent(BaseAgent):
         if text.startswith("```"):
             # Remove opening fence
             first_newline = text.index("\n") if "\n" in text else len(text)
-            text = text[first_newline + 1:]
+            text = text[first_newline + 1 :]
             # Remove closing fence
             if text.endswith("```"):
                 text = text[:-3]

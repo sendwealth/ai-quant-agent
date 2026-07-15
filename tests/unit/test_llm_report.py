@@ -2,17 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Optional
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from quant_agent.agents.base import AgentResult
 from quant_agent.llm.client import LLMClient
 from quant_agent.llm.report import LLMReportGenerator
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -22,7 +16,7 @@ def _make_agent_result(
     signal: str = "BUY",
     confidence: float = 0.8,
     reasoning: str = "Test reasoning",
-    metrics: Optional[dict] = None,
+    metrics: dict | None = None,
     success: bool = True,
 ) -> AgentResult:
     return AgentResult(
@@ -100,8 +94,7 @@ class TestLLMReportGeneratorGenerate:
         """generate() returns the LLM response text for a complete report."""
         mock_llm = MagicMock(spec=LLMClient)
         mock_llm.invoke.return_value = (
-            "# Investment Analysis Report\n\n"
-            "## Summary\nCATL shows strong fundamentals..."
+            "# Investment Analysis Report\n\n## Summary\nCATL shows strong fundamentals..."
         )
 
         gen = LLMReportGenerator(llm=mock_llm)

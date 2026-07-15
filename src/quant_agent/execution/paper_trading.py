@@ -25,7 +25,7 @@ import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from ..portfolio import CommissionModel, Portfolio, Position, Trade
 
@@ -54,7 +54,7 @@ class PaperTradingService:
         self,
         data_dir: str,
         initial_capital: float = 100_000.0,
-        commission: Optional[CommissionModel] = None,
+        commission: CommissionModel | None = None,
     ) -> None:
         self._state_dir = Path(data_dir) / "paper_trading"
         self._state_dir.mkdir(parents=True, exist_ok=True)
@@ -81,8 +81,11 @@ class PaperTradingService:
     ) -> Trade:
         """Execute a simulated buy and persist state."""
         result = self._portfolio.buy(
-            code, price, amount,
-            stop_loss=stop_loss, take_profit=take_profit,
+            code,
+            price,
+            amount,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
         )
         self.save_state()
         return result
@@ -91,8 +94,8 @@ class PaperTradingService:
         self,
         code: str,
         price: float,
-        amount: Optional[int] = None,
-    ) -> Optional[Trade]:
+        amount: int | None = None,
+    ) -> Trade | None:
         """Execute a simulated sell and persist state."""
         result = self._portfolio.sell(code, price, amount)
         if result is not None:
@@ -119,24 +122,24 @@ class PaperTradingService:
         pf = self._portfolio
         positions = []
         for code, pos in pf.positions.items():
-            positions.append({
-                "code": code,
-                "shares": pos.shares,
-                "avg_price": round(pos.avg_price, 4),
-                "current_price": round(pos.current_price, 4),
-                "pnl": round(pos.pnl, 2),
-                "pnl_pct": round(pos.pnl_pct, 4),
-                "stop_loss": pos.stop_loss,
-                "take_profit": pos.take_profit,
-            })
+            positions.append(
+                {
+                    "code": code,
+                    "shares": pos.shares,
+                    "avg_price": round(pos.avg_price, 4),
+                    "current_price": round(pos.current_price, 4),
+                    "pnl": round(pos.pnl, 2),
+                    "pnl_pct": round(pos.pnl_pct, 4),
+                    "stop_loss": pos.stop_loss,
+                    "take_profit": pos.take_profit,
+                }
+            )
         return {
             "cash": round(pf.cash, 2),
             "positions": positions,
             "total_equity": round(pf.total_equity, 2),
             "position_value": round(pf.position_value, 2),
-            "unrealized_pnl": round(
-                sum(p.pnl for p in pf.positions.values()), 2
-            ),
+            "unrealized_pnl": round(sum(p.pnl for p in pf.positions.values()), 2),
             "trade_count": len(pf.trades),
             "closed_trades": len(pf.closed_trades),
         }
@@ -211,19 +214,21 @@ class PaperTradingService:
 
         trades: list[Trade] = []
         for td in data.get("trades", []):
-            trades.append(Trade(
-                stock_code=td["stock_code"],
-                direction=td["direction"],
-                entry_date=td.get("entry_date", ""),
-                exit_date=td.get("exit_date"),
-                entry_price=td.get("entry_price", 0.0),
-                exit_price=td.get("exit_price", 0.0),
-                shares=td.get("shares", 0),
-                pnl=td.get("pnl", 0.0),
-                pnl_pct=td.get("pnl_pct", 0.0),
-                commission=td.get("commission", 0.0),
-                status=td.get("status", "open"),
-            ))
+            trades.append(
+                Trade(
+                    stock_code=td["stock_code"],
+                    direction=td["direction"],
+                    entry_date=td.get("entry_date", ""),
+                    exit_date=td.get("exit_date"),
+                    entry_price=td.get("entry_price", 0.0),
+                    exit_price=td.get("exit_price", 0.0),
+                    shares=td.get("shares", 0),
+                    pnl=td.get("pnl", 0.0),
+                    pnl_pct=td.get("pnl_pct", 0.0),
+                    commission=td.get("commission", 0.0),
+                    status=td.get("status", "open"),
+                )
+            )
 
         equity_curve = data.get("equity_curve", [])
 
@@ -246,8 +251,7 @@ class PaperTradingService:
                 return self._load_state()
             except Exception:
                 logger.warning(
-                    "Failed to load paper-trading state from %s; "
-                    "creating fresh portfolio",
+                    "Failed to load paper-trading state from %s; creating fresh portfolio",
                     self._state_file,
                     exc_info=True,
                 )
@@ -264,7 +268,8 @@ class PaperTradingService:
         if version != _STATE_VERSION:
             logger.warning(
                 "State file version %d != expected %d; attempting migration",
-                version, _STATE_VERSION,
+                version,
+                _STATE_VERSION,
             )
         return self._deserialize(data)
 

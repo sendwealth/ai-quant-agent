@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from .client import LLMClient
 from .prompts import REPORT_SYSTEM, REPORT_USER
 
 if TYPE_CHECKING:
+    from ..agents.base import AgentResult
     from ..orchestrator import AnalysisReport
 
 logger = logging.getLogger(__name__)
@@ -72,19 +73,19 @@ class LLMReportGenerator:
 # ── helpers ────────────────────────────────────────────────────────────────
 
 
-def _sig(r: Optional[AgentResult]) -> str:
+def _sig(r: AgentResult | None) -> str:
     return r.signal if r else "N/A"
 
 
-def _conf(r: Optional[AgentResult]) -> str:
+def _conf(r: AgentResult | None) -> str:
     return f"{r.confidence:.0%}" if r else "N/A"
 
 
-def _reason(r: Optional[AgentResult]) -> str:
+def _reason(r: AgentResult | None) -> str:
     return r.reasoning if r else "N/A"
 
 
-def _metrics_str(r: Optional[AgentResult]) -> str:
+def _metrics_str(r: AgentResult | None) -> str:
     if not r or not r.metrics:
         return "N/A"
     return json.dumps(r.metrics, ensure_ascii=False, default=str)[:500]

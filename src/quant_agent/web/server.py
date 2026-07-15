@@ -27,18 +27,18 @@ import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
 from ..orchestrator import Orchestrator
-from ..screener.stock_names import search_stocks
 from ..reporting import (
-    render_markdown,
-    save_report,
+    latest_for_stock,
     list_reports,
     load_report,
-    latest_for_stock,
     plot_price_chart,
+    render_markdown,
+    save_report,
 )
+from ..screener.stock_names import search_stocks
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +139,11 @@ def screen_core(qs: dict) -> dict:
         )
         name_map = {s.stock_code: getattr(s, "name", None) or "" for s in screen_result.top_stocks}
         deep_reports = [
-            {"stock_code": r.stock_code, "name": name_map.get(r.stock_code, ""), "report": r.to_dict()}
+            {
+                "stock_code": r.stock_code,
+                "name": name_map.get(r.stock_code, ""),
+                "report": r.to_dict(),
+            }
             for r in reports
         ]
     else:
@@ -314,12 +318,10 @@ def _api_dispatch(handler, path: str, qs: dict) -> bool:
         _json_response(handler, reports_core())
         return True
     if path.startswith("/api/report"):
-        _json_response(
-            handler, report_core(qs, path[len("/api/report"):].strip("/").split("/"))
-        )
+        _json_response(handler, report_core(qs, path[len("/api/report") :].strip("/").split("/")))
         return True
     if path.startswith("/api/chart/"):
-        _serve_chart(handler, path[len("/api/chart/"):])
+        _serve_chart(handler, path[len("/api/chart/") :])
         return True
     return False
 
@@ -377,7 +379,7 @@ class _Handler(BaseHTTPRequestHandler):
                 _error(self, f"未知 API: {path}", status=404)
                 return
             if path.startswith("/static/"):
-                _serve_static(self, path[len("/static/"):])
+                _serve_static(self, path[len("/static/") :])
                 return
             _serve_static(self, path)
         except ValueError as e:
@@ -403,14 +405,31 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 def run_web(host: str = "127.0.0.1", port: int = 8000, offline: bool = False) -> None:
-    """启动 Web 服务（阻塞）"""
+    """启动 Web 服务（阻塞）
+
+    安全默认：仅监听 loopback（127.0.0.1）。若显式绑定到非本地地址
+    （如 0.0.0.0 或公网 IP），会打印安全告警，提醒用户该端口将对外暴露。
+    绑定到非 loopback 地址属于「显式选择」，本系统不默认开启。
+    """
     if offline:
         os.environ["QUANT_OFFLINE_MODE"] = "true"
+
+    # P4-04: 非 loopback 绑定需显式确认，避免误暴露到公网
+    _LOOPBACK = ("127.0.0.1", "localhost", "::1")
+    if host not in _LOOPBACK:
+        print(
+            "\n  ⚠️  安全提醒：Web 服务将监听非本地地址 "
+            f"({host}:{port})，该端口可能对外部网络可见。\n"
+            "      本系统默认仅用于研究/模拟，请勿在不受信任的网络中暴露。\n"
+        )
+
+    # 允许快速重启（TIME_WAIT 端口复用）
+    ThreadingHTTPServer.allow_reuse_address = True
     server = ThreadingHTTPServer((host, port), _Handler)
     url = f"http://{host}:{port}"
-    print(f"\n  AI Quant Agent Web UI 已启动")
+    print("\n  AI Quant Agent Web UI 已启动")
     print(f"  → {url}")
-    print(f"  (Ctrl+C 退出)\n")
+    print("  (Ctrl+C 退出)\n")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

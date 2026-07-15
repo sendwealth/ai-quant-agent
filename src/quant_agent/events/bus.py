@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ class EventType(str, Enum):
 @dataclass
 class Event:
     """事件"""
+
     type: EventType
     payload: dict[str, Any] = field(default_factory=dict)
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -112,17 +113,19 @@ class EventBus:
 
     def publish_simple(self, event_type: EventType, payload: dict = None, source: str = "") -> int:
         """便捷发布"""
-        return self.publish(Event(
-            type=event_type,
-            payload=payload or {},
-            source=source,
-        ))
+        return self.publish(
+            Event(
+                type=event_type,
+                payload=payload or {},
+                source=source,
+            )
+        )
 
     def _record(self, event: Event):
         """记录事件历史"""
         self._history.append(event)
         if len(self._history) > self._max_history:
-            self._history = self._history[-self._max_history:]
+            self._history = self._history[-self._max_history :]
 
     @property
     def history(self) -> list[Event]:

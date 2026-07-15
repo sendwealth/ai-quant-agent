@@ -3,12 +3,10 @@
 import json
 from pathlib import Path
 
-import pytest
-
-from quant_agent.agents.execution import ExecutionAgent, Order, Position
 from quant_agent.agents.base import AgentResult
+from quant_agent.agents.execution import ExecutionAgent, Order, Position
 from quant_agent.audit import AuditLogger
-from quant_agent.observability.metrics import MetricsCollector, HealthChecker
+from quant_agent.observability.metrics import HealthChecker, MetricsCollector
 
 
 class TestOrder:
@@ -118,6 +116,7 @@ class TestMetricsCollector:
 
     def test_timer(self):
         import time
+
         m = MetricsCollector()
         with m.timer("analysis"):
             time.sleep(0.01)
@@ -182,8 +181,21 @@ class TestAuditLogger:
         al.log_trade_decision(
             stock_code="300750",
             signal="BUY",
-            agent_results=[{"agent_name": "fundamental", "signal": "BUY", "confidence": 0.8, "reasoning": "strong"}],
-            final_decision={"action": "BUY", "quantity": 200, "price": 100.0, "stop_loss": 92.0, "take_profit": 120.0},
+            agent_results=[
+                {
+                    "agent_name": "fundamental",
+                    "signal": "BUY",
+                    "confidence": 0.8,
+                    "reasoning": "strong",
+                }
+            ],
+            final_decision={
+                "action": "BUY",
+                "quantity": 200,
+                "price": 100.0,
+                "stop_loss": 92.0,
+                "take_profit": 120.0,
+            },
         )
         files = list(log_dir.glob("audit_*.jsonl"))
         assert len(files) == 1
@@ -230,7 +242,10 @@ class TestExecutionAgentAudit:
             AgentResult("risk", "300750", signal="BUY", confidence=0.7, reasoning="consensus"),
         ]
         order = agent.execute_signal(
-            "300750", "BUY", position_pct=0.20, current_price=100.0,
+            "300750",
+            "BUY",
+            position_pct=0.20,
+            current_price=100.0,
             agent_results=results,
         )
         assert order is not None
@@ -251,7 +266,9 @@ class TestExecutionAgentAudit:
         agent = ExecutionAgent(initial_capital=100000, audit_logger=al)
         results = [AgentResult("risk", "300750", signal="HOLD", confidence=0.5, reasoning="mixed")]
         order = agent.execute_signal(
-            "300750", "HOLD", current_price=100.0,
+            "300750",
+            "HOLD",
+            current_price=100.0,
             agent_results=results,
         )
         assert order is None

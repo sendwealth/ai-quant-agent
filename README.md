@@ -1,5 +1,8 @@
 # AI Quant Agent v3.1
 
+> ⚠️ **研究 / 模拟用途，不构成投资建议。** 本系统默认仅用于研究、回测与模拟交易；
+> 任何实盘交易能力均为独立、显式启用的适配器。股市有风险，决策需自行谨慎。
+
 LLM 增强的多 Agent 协作 A 股量化交易系统。规则引擎 + LLM 双引擎，支持自然语言交互。
 
 > **v3.1 易用性升级**：零配置开箱即用（无 token / 无网络时自动走样例兜底 + LLM 离线规则增强）；
@@ -326,6 +329,34 @@ QUANT_EMAIL_SENDER=your@163.com
 QUANT_EMAIL_PASSWORD=smtp_auth_code
 QUANT_EMAIL_RECIPIENTS=to@example.com
 ```
+
+## 运行模式 (Run Mode)
+
+通过环境变量 `QUANT_RUN_MODE` 或 `Settings.run_mode` 显式区分运行模式（默认 `research`）：
+
+| 模式 | 说明 |
+|------|------|
+| `research` | 默认。研究/分析，不产生任何交易副作用 |
+| `backtest` | 历史回测，纯离线计算 |
+| `paper`   | 模拟交易（持久化由 `QUANT_PERSIST_TRADING` 控制） |
+| `live`    | 实盘交易 —— **本开源版本未实现**，设置后启动失败（fail-safe，避免误用） |
+
+> Web UI 默认仅监听 `127.0.0.1`；若显式绑定到非本地地址会打印安全告警，提醒端口将对外暴露。
+
+## 开发与贡献
+
+本地门禁（等价于 CI）：
+
+```bash
+uv sync --extra baostock     # 安装依赖（含 baostock 可选源）
+uv run pre-commit install    # 提交前自动 lint/格式化
+make check                   # format + lint + test + build
+make smoke                   # 真实数据源连通性测试（需联网，默认不跑）
+```
+
+- 单元测试 / 集成测试**默认禁用网络**（`pytest-socket`），真实数据源连通性测试归入 `tests/smoke/`（`-m smoke`）。
+- 类型检查：`make type`（mypy，历史债务较多，当前为 informational）。
+- 治理文档：`CONTRIBUTING.md` / `CODE_OF_CONDUCT.md` / `SECURITY.md` / `SUPPORT.md` / `CHANGELOG.md`。
 
 ## License
 

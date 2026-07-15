@@ -7,7 +7,7 @@ import smtplib
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..config import Settings
@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 
 # Signal emojis
 _SIGNAL_ICON = {
-    "BUY": "&#x1F7E2;",   # green circle
-    "SELL": "&#x1F534;",   # red circle
-    "HOLD": "&#x1F7E1;",   # yellow circle
+    "BUY": "&#x1F7E2;",  # green circle
+    "SELL": "&#x1F534;",  # red circle
+    "HOLD": "&#x1F7E1;",  # yellow circle
 }
 
 
@@ -38,9 +38,7 @@ class EmailNotifier:
         self.smtp_port = settings.email_smtp_port
         self.sender = settings.email_sender
         self.password = settings.email_password
-        self.recipients = [
-            r.strip() for r in settings.email_recipients.split(",") if r.strip()
-        ]
+        self.recipients = [r.strip() for r in settings.email_recipients.split(",") if r.strip()]
 
     def send_trade_signal(self, report: AnalysisReport) -> bool:
         """交易信号通知 — 单股分析产生 BUY/SELL 时发送"""
@@ -52,11 +50,7 @@ class EmailNotifier:
             return False
 
         icon = _SIGNAL_ICON.get(signal, "")
-        confidence = (
-            f"{report.risk_result.confidence:.0%}"
-            if report.risk_result
-            else "N/A"
-        )
+        confidence = f"{report.risk_result.confidence:.0%}" if report.risk_result else "N/A"
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
         # Build agent votes table
@@ -93,8 +87,8 @@ class EmailNotifier:
 {exec_info}
 
 <h3>组合状态</h3>
-<p>总权益: {report.summary.get('total_equity', 0):,.2f} |
-   收益: {report.summary.get('total_return', 0):.2%}</p>
+<p>总权益: {report.summary.get("total_equity", 0):,.2f} |
+   收益: {report.summary.get("total_return", 0):.2%}</p>
 
 <hr>
 <p style="color: #999; font-size: 12px;">AI Quant Agent v3.0 | 自动通知，不构成投资建议</p>
@@ -117,25 +111,15 @@ class EmailNotifier:
         equity = portfolio_summary.get("total_equity", 0.0)
 
         # Signal summary
-        buy_count = sum(
-            1 for r in reports
-            if r.risk_result and r.risk_result.signal == "BUY"
-        )
-        sell_count = sum(
-            1 for r in reports
-            if r.risk_result and r.risk_result.signal == "SELL"
-        )
+        buy_count = sum(1 for r in reports if r.risk_result and r.risk_result.signal == "BUY")
+        sell_count = sum(1 for r in reports if r.risk_result and r.risk_result.signal == "SELL")
         hold_count = len(reports) - buy_count - sell_count
 
         # Individual stock rows
         stock_rows = ""
         for report in reports:
             signal = report.risk_result.signal if report.risk_result else "HOLD"
-            conf = (
-                f"{report.risk_result.confidence:.0%}"
-                if report.risk_result
-                else "N/A"
-            )
+            conf = f"{report.risk_result.confidence:.0%}" if report.risk_result else "N/A"
             icon = _SIGNAL_ICON.get(signal, "")
             reason = ""
             if report.risk_result:
@@ -191,7 +175,7 @@ class EmailNotifier:
 
 <h3>组合概况</h3>
 <p>总权益: <strong>{equity:,.2f}</strong> | 收益: <strong>{total_return:.2%}</strong> |
-   现金: {portfolio_summary.get('cash', 0):,.2f}</p>
+   现金: {portfolio_summary.get("cash", 0):,.2f}</p>
 
 <hr>
 <p style="color: #999; font-size: 12px;">

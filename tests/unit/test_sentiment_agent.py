@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from quant_agent.agents.base import AgentResult
 from quant_agent.agents.sentiment import SentimentAgent
 from quant_agent.llm.client import LLMClient, LLMError
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -19,7 +18,11 @@ def _mock_news(count: int = 3, positive: bool = True) -> list[dict]:
     """Create mock news items."""
     if positive:
         items = [
-            {"title": f"Positive news {i}", "content": f"Good development {i}", "date": "2026-04-10"}
+            {
+                "title": f"Positive news {i}",
+                "content": f"Good development {i}",
+                "date": "2026-04-10",
+            }
             for i in range(1, count + 1)
         ]
     else:
@@ -38,13 +41,15 @@ def _make_llm_response(
     key_factors: list[str] | None = None,
 ) -> str:
     """Build a JSON string that the LLM would return for sentiment analysis."""
-    return json.dumps({
-        "signal": signal,
-        "confidence": confidence,
-        "sentiment_score": sentiment_score,
-        "reasoning": reasoning,
-        "key_factors": key_factors or ["factor_a", "factor_b"],
-    })
+    return json.dumps(
+        {
+            "signal": signal,
+            "confidence": confidence,
+            "sentiment_score": sentiment_score,
+            "reasoning": reasoning,
+            "key_factors": key_factors or ["factor_a", "factor_b"],
+        }
+    )
 
 
 def _make_llm_response_in_fence(**kwargs) -> str:
@@ -103,7 +108,9 @@ class TestSentimentAgentAnalyze:
         agent = _create_agent(
             news_data=_mock_news(5, positive=True),
             llm_response=_make_llm_response(
-                signal="BUY", confidence=0.8, sentiment_score=0.7,
+                signal="BUY",
+                confidence=0.8,
+                sentiment_score=0.7,
             ),
         )
 
@@ -123,7 +130,9 @@ class TestSentimentAgentAnalyze:
         agent = _create_agent(
             news_data=_mock_news(3, positive=False),
             llm_response=_make_llm_response(
-                signal="SELL", confidence=0.6, sentiment_score=-0.5,
+                signal="SELL",
+                confidence=0.6,
+                sentiment_score=-0.5,
             ),
         )
 
@@ -138,7 +147,9 @@ class TestSentimentAgentAnalyze:
         agent = _create_agent(
             news_data=[],
             llm_response=_make_llm_response(
-                signal="HOLD", confidence=0.3, sentiment_score=0.0,
+                signal="HOLD",
+                confidence=0.3,
+                sentiment_score=0.0,
                 reasoning="No sufficient news data",
             ),
         )
@@ -179,7 +190,9 @@ class TestSentimentAgentAnalyze:
         agent = _create_agent(
             news_data=_mock_news(2),
             llm_response=_make_llm_response_in_fence(
-                signal="BUY", confidence=0.7, sentiment_score=0.5,
+                signal="BUY",
+                confidence=0.7,
+                sentiment_score=0.5,
             ),
         )
 
@@ -191,13 +204,15 @@ class TestSentimentAgentAnalyze:
 
     def test_analyze_invalid_signal_defaulted_to_hold(self):
         """LLM returning an unrecognized signal defaults to HOLD."""
-        response = json.dumps({
-            "signal": "STRONG_BUY",  # Not in BUY/SELL/HOLD
-            "confidence": 0.9,
-            "sentiment_score": 0.8,
-            "reasoning": "Very bullish",
-            "key_factors": ["a"],
-        })
+        response = json.dumps(
+            {
+                "signal": "STRONG_BUY",  # Not in BUY/SELL/HOLD
+                "confidence": 0.9,
+                "sentiment_score": 0.8,
+                "reasoning": "Very bullish",
+                "key_factors": ["a"],
+            }
+        )
         agent = _create_agent(llm_response=response)
 
         result = agent.analyze("300750")
@@ -206,13 +221,15 @@ class TestSentimentAgentAnalyze:
 
     def test_analyze_confidence_clamped_above_1(self):
         """Confidence > 1.0 is clamped to 1.0."""
-        response = json.dumps({
-            "signal": "BUY",
-            "confidence": 1.5,  # Out of range
-            "sentiment_score": 0.5,
-            "reasoning": "Test",
-            "key_factors": [],
-        })
+        response = json.dumps(
+            {
+                "signal": "BUY",
+                "confidence": 1.5,  # Out of range
+                "sentiment_score": 0.5,
+                "reasoning": "Test",
+                "key_factors": [],
+            }
+        )
         agent = _create_agent(llm_response=response)
 
         result = agent.analyze("300750")
@@ -221,13 +238,15 @@ class TestSentimentAgentAnalyze:
 
     def test_analyze_confidence_clamped_below_0(self):
         """Confidence < 0.0 is clamped to 0.0."""
-        response = json.dumps({
-            "signal": "SELL",
-            "confidence": -0.3,
-            "sentiment_score": -0.5,
-            "reasoning": "Test",
-            "key_factors": [],
-        })
+        response = json.dumps(
+            {
+                "signal": "SELL",
+                "confidence": -0.3,
+                "sentiment_score": -0.5,
+                "reasoning": "Test",
+                "key_factors": [],
+            }
+        )
         agent = _create_agent(llm_response=response)
 
         result = agent.analyze("300750")
@@ -321,10 +340,12 @@ class TestSentimentAgentFetchNews:
         """_fetch_news converts a DataFrame response to a list of dicts."""
         import pandas as pd
 
-        df = pd.DataFrame([
-            {"title": "News A", "content": "Content A"},
-            {"title": "News B", "content": "Content B"},
-        ])
+        df = pd.DataFrame(
+            [
+                {"title": "News A", "content": "Content A"},
+                {"title": "News B", "content": "Content B"},
+            ]
+        )
 
         ds = MagicMock()
         ds.get_news.return_value = df
@@ -446,5 +467,5 @@ class TestSentimentAgentParseResponse:
 
     def test_parse_invalid_json_raises(self):
         """Invalid JSON raises JSONDecodeError."""
-        with pytest.raises(Exception):
+        with pytest.raises(json.JSONDecodeError):
             SentimentAgent._parse_response("not json at all")

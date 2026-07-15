@@ -6,7 +6,6 @@ import logging
 import os
 import time
 from contextlib import contextmanager
-from typing import Optional
 
 import pandas as pd
 
@@ -37,6 +36,7 @@ def _no_proxy():
 
     # Patch urllib.getproxies to return empty dict (bypasses macOS system proxy)
     import urllib.request
+
     _orig_getproxies = urllib.request.getproxies
     urllib.request.getproxies = lambda: {}
 
@@ -54,12 +54,13 @@ class AkshareSource(DataSource):
         self,
         timeout: int = 10,
         max_retries: int = 3,
-        rate_limiter: Optional[RateLimiter] = None,
+        rate_limiter: RateLimiter | None = None,
     ):
         self.timeout = timeout
         self.max_retries = max_retries
         self._rate_limiter = rate_limiter or RateLimiter(
-            max_calls=60, period=60.0,
+            max_calls=60,
+            period=60.0,
         )
 
     @property
@@ -70,6 +71,7 @@ class AkshareSource(DataSource):
     def available(self) -> bool:
         try:
             import akshare as ak  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -86,7 +88,9 @@ class AkshareSource(DataSource):
                 last_err = e
                 if attempt < self.max_retries:
                     wait = 2 ** (attempt - 1)
-                    logger.warning(f"AkShare {func.__name__} 第{attempt}次网络错误: {e}, {wait:.0f}s后重试")
+                    logger.warning(
+                        f"AkShare {func.__name__} 第{attempt}次网络错误: {e}, {wait:.0f}s后重试"
+                    )
                     time.sleep(wait)
             except Exception as e:
                 # Non-retryable (auth, data format, rate-limit errors): fail fast
@@ -96,11 +100,12 @@ class AkshareSource(DataSource):
 
     def get_price_data(
         self, stock_code: str, days: int = 250, adjust: str = "qfq"
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """获取历史行情（AkShare）"""
         try:
-            import akshare as ak
             from datetime import datetime, timedelta
+
+            import akshare as ak
 
             end_date = datetime.now().strftime("%Y%m%d")
             start_date = (datetime.now() - timedelta(days=int(days * 1.5))).strftime("%Y%m%d")
@@ -118,9 +123,15 @@ class AkshareSource(DataSource):
 
             # 标准化列名
             column_map = {
-                "日期": "date", "开盘": "open", "收盘": "close",
-                "最高": "high", "最低": "low", "成交量": "volume",
-                "成交额": "amount", "涨跌幅": "pct_change", "换手率": "turnover",
+                "日期": "date",
+                "开盘": "open",
+                "收盘": "close",
+                "最高": "high",
+                "最低": "low",
+                "成交量": "volume",
+                "成交额": "amount",
+                "涨跌幅": "pct_change",
+                "换手率": "turnover",
             }
             df = df.rename(columns={k: v for k, v in column_map.items() if k in df.columns})
             df = df.sort_values("date").reset_index(drop=True)
@@ -136,7 +147,7 @@ class AkshareSource(DataSource):
             logger.warning(f"AkShare 行情获取失败: {e}")
             return None
 
-    def get_realtime_price(self, stock_code: str) -> Optional[float]:
+    def get_realtime_price(self, stock_code: str) -> float | None:
         """获取实时价格（腾讯财经）"""
         import requests
 
@@ -156,10 +167,11 @@ class AkshareSource(DataSource):
             logger.warning(f"AkShare 实时价格获取失败: {e}")
         return None
 
-    def get_financial_indicators(self, stock_code: str) -> Optional[pd.DataFrame]:
+    def get_financial_indicators(self, stock_code: str) -> pd.DataFrame | None:
         """获取财务指标（AkShare）"""
         try:
             import akshare as ak
+
             df = self._retry_call(
                 ak.stock_financial_analysis_indicator,
                 symbol=stock_code,
@@ -171,7 +183,7 @@ class AkshareSource(DataSource):
             logger.warning(f"AkShare 财务指标获取失败: {e}")
         return None
 
-    def get_news(self, stock_code: str, count: int = 20) -> Optional[pd.DataFrame]:
+    def get_news(self, stock_code: str, count: int = 20) -> pd.DataFrame | None:
         """获取个股新闻（东方财富源）
 
         Args:
@@ -184,6 +196,7 @@ class AkshareSource(DataSource):
         """
         try:
             import akshare as ak
+
             df = self._retry_call(
                 ak.stock_news_em,
                 symbol=stock_code,
@@ -208,9 +221,7 @@ class AkshareSource(DataSource):
             logger.warning(f"AkShare 新闻获取失败: {e}")
             return None
 
-    def get_financial_snapshot(
-        self, stock_code: str
-    ) -> Optional[FinancialSnapshot]:
+    def get_financial_snapshot(self, stock_code: str) -> FinancialSnapshot | None:
         """获取财务快照 — 从 AkShare 财务指标接口提取.
 
         Uses ``stock_financial_analysis_indicator`` to get quarterly metrics,
@@ -241,8 +252,18 @@ class AkshareSource(DataSource):
                         val = float(latest[cn_name])
                         # AkShare returns percentages as decimals (e.g. 0.22 for 22%)
                         # but sometimes as raw numbers. Normalize: if > 1, divide by 100.
-                        if en_key in ("roe", "gross_margin", "net_margin", "debt_ratio",
-                                      "revenue_growth", "profit_growth") and abs(val) > 1:
+                        if (
+                            en_key
+                            in (
+                                "roe",
+                                "gross_margin",
+                                "net_margin",
+                                "debt_ratio",
+                                "revenue_growth",
+                                "profit_growth",
+                            )
+                            and abs(val) > 1
+                        ):
                             val = val / 100.0
                         data[en_key] = val
                     except (ValueError, TypeError):

@@ -11,6 +11,11 @@ build/
 .pytest_cache/
 htmlcov/
 .coverage
+coverage.xml
+
+# Type check / lint caches
+.mypy_cache/
+.ruff_cache/
 
 # IDE
 .vscode/
@@ -18,6 +23,10 @@ htmlcov/
 
 # Env
 .env
+
+# Runtime logs
+data/*.log
+*.log
 
 # Data cache
 data/cache/

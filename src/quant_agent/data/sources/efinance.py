@@ -7,7 +7,6 @@ import os
 import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta
-from typing import Optional
 
 import pandas as pd
 
@@ -43,6 +42,7 @@ def _no_proxy():
     patched_sessions = []
     try:
         import efinance.common.getter as _eg
+
         if hasattr(_eg, "session") and _eg.session.trust_env:
             _eg.session.trust_env = False
             patched_sessions.append(_eg.session)
@@ -51,6 +51,7 @@ def _no_proxy():
 
     # Patch urllib.getproxies to return empty (bypasses macOS system proxy)
     import urllib.request
+
     _orig_getproxies = urllib.request.getproxies
     urllib.request.getproxies = lambda: {}
 
@@ -61,6 +62,7 @@ def _no_proxy():
         for s in patched_sessions:
             s.trust_env = True
         urllib.request.getproxies = _orig_getproxies
+
 
 # Column name mapping: efinance Chinese → English
 _PRICE_COL_MAP = {
@@ -87,11 +89,12 @@ class EfinanceSource(DataSource):
     def __init__(
         self,
         max_retries: int = 3,
-        rate_limiter: Optional[RateLimiter] = None,
+        rate_limiter: RateLimiter | None = None,
     ):
         self.max_retries = max_retries
         self._rate_limiter = rate_limiter or RateLimiter(
-            max_calls=120, period=60.0,
+            max_calls=120,
+            period=60.0,
         )
 
     @property
@@ -102,6 +105,7 @@ class EfinanceSource(DataSource):
     def available(self) -> bool:
         try:
             import efinance  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -121,8 +125,7 @@ class EfinanceSource(DataSource):
                 if attempt < self.max_retries:
                     wait = 2 ** (attempt - 1)
                     logger.warning(
-                        f"efinance {func.__name__} attempt {attempt}: {e}, "
-                        f"retry in {wait}s"
+                        f"efinance {func.__name__} attempt {attempt}: {e}, retry in {wait}s"
                     )
                     time.sleep(wait)
             except Exception as e:
@@ -134,7 +137,7 @@ class EfinanceSource(DataSource):
 
     def get_price_data(
         self, stock_code: str, days: int = 250, adjust: str = "qfq"
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """获取历史日线行情。
 
         Uses ``ef.stock.get_quote_history()``.
@@ -142,9 +145,7 @@ class EfinanceSource(DataSource):
         try:
             import efinance as ef
 
-            start_date = (datetime.now() - timedelta(days=int(days * 1.5))).strftime(
-                "%Y%m%d"
-            )
+            start_date = (datetime.now() - timedelta(days=int(days * 1.5))).strftime("%Y%m%d")
 
             # klt=101: daily, fqt: 1=qfq, 2=hfq, 0=none
             fqt = 1 if adjust == "qfq" else (2 if adjust == "hfq" else 0)
@@ -161,9 +162,7 @@ class EfinanceSource(DataSource):
                 return None
 
             # Rename columns
-            df = df.rename(
-                columns={k: v for k, v in _PRICE_COL_MAP.items() if k in df.columns}
-            )
+            df = df.rename(columns={k: v for k, v in _PRICE_COL_MAP.items() if k in df.columns})
 
             # Keep only standard columns that exist
             standard_cols = ["date", "open", "high", "low", "close", "volume", "amount"]
@@ -189,7 +188,7 @@ class EfinanceSource(DataSource):
             logger.warning(f"efinance price data failed for {stock_code}: {e}")
             return None
 
-    def get_realtime_price(self, stock_code: str) -> Optional[float]:
+    def get_realtime_price(self, stock_code: str) -> float | None:
         """获取实时价格 — 从最新 quote history 行获取."""
         try:
             import efinance as ef
@@ -207,9 +206,7 @@ class EfinanceSource(DataSource):
             logger.warning(f"efinance realtime price failed for {stock_code}: {e}")
         return None
 
-    def get_financial_snapshot(
-        self, stock_code: str
-    ) -> Optional[FinancialSnapshot]:
+    def get_financial_snapshot(self, stock_code: str) -> FinancialSnapshot | None:
         """获取财务快照 — 从 efinance 公司业绩数据提取.
 
         Uses ``ef.stock.get_all_company_performance()`` which returns
@@ -249,8 +246,18 @@ class EfinanceSource(DataSource):
                     try:
                         val = float(val)
                         # Convert percentages: efinance may return "22.5" meaning 22.5%
-                        if en_key in ("roe", "gross_margin", "net_margin", "debt_ratio",
-                                      "revenue_growth", "profit_growth") and abs(val) > 1:
+                        if (
+                            en_key
+                            in (
+                                "roe",
+                                "gross_margin",
+                                "net_margin",
+                                "debt_ratio",
+                                "revenue_growth",
+                                "profit_growth",
+                            )
+                            and abs(val) > 1
+                        ):
                             val = val / 100.0
                         data[en_key] = val
                     except (ValueError, TypeError):

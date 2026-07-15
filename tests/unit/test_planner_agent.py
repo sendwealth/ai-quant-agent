@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from quant_agent.agents.base import AgentResult
 from quant_agent.agents.planner import ExecutionPlan, PlannerAgent
 from quant_agent.llm.client import LLMClient, LLMError
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -50,13 +47,15 @@ def _plan_json(
     notes: str = "",
 ) -> str:
     """Build a JSON string for an ExecutionPlan."""
-    return json.dumps({
-        "stock_code": stock_code,
-        "days": days,
-        "focus_areas": focus_areas or ["all"],
-        "analysis_type": analysis_type,
-        "notes": notes,
-    })
+    return json.dumps(
+        {
+            "stock_code": stock_code,
+            "days": days,
+            "focus_areas": focus_areas or ["all"],
+            "analysis_type": analysis_type,
+            "notes": notes,
+        }
+    )
 
 
 # ── parse_intent tests ──────────────────────────────────────────────────────
@@ -244,7 +243,8 @@ class TestPlannerAgentAnalyze:
     def test_analyze_includes_plan_in_metrics(self):
         """Result metrics contain the full ExecutionPlan dump."""
         plan = ExecutionPlan(
-            stock_code="300750", days=60,
+            stock_code="300750",
+            days=60,
             focus_areas=["fundamental", "technical"],
             analysis_type="quick",
         )

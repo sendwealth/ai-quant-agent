@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from functools import wraps
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -21,6 +21,7 @@ _RETRYABLE = (ConnectionError, TimeoutError, OSError)
 
 def retry(max_retries: int = 3, backoff_base: float = 2.0):
     """重试装饰器（指数退避，仅重试网络/IO 错误）"""
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -32,7 +33,9 @@ def retry(max_retries: int = 3, backoff_base: float = 2.0):
                     last_err = e
                     if attempt < max_retries:
                         wait = backoff_base ** (attempt - 1)
-                        logger.warning(f"{func.__name__} 第{attempt}次失败 (retryable): {e}, {wait:.0f}s后重试")
+                        logger.warning(
+                            f"{func.__name__} 第{attempt}次失败 (retryable): {e}, {wait:.0f}s后重试"
+                        )
                         time.sleep(wait)
                     else:
                         raise
@@ -40,7 +43,9 @@ def retry(max_retries: int = 3, backoff_base: float = 2.0):
                     # Non-retryable error — propagate immediately
                     raise
             raise last_err  # type: ignore  # pragma: no cover
+
         return wrapper
+
     return decorator
 
 
@@ -49,13 +54,14 @@ class TushareSource(DataSource):
 
     def __init__(
         self,
-        token: Optional[str] = None,
-        rate_limiter: Optional[RateLimiter] = None,
+        token: str | None = None,
+        rate_limiter: RateLimiter | None = None,
     ):
         self._token = token
         self._pro = None
         self._rate_limiter = rate_limiter or RateLimiter(
-            max_calls=200, period=60.0,
+            max_calls=200,
+            period=60.0,
         )
 
     def __repr__(self) -> str:
@@ -72,6 +78,7 @@ class TushareSource(DataSource):
                 "或设置环境变量 QUANT_TUSHARE_TOKEN"
             )
         import tushare as ts
+
         self._pro = ts.pro_api(self._token)
         logger.info("Tushare Pro API initialized (per-instance token)")
 
@@ -98,12 +105,13 @@ class TushareSource(DataSource):
     @retry(max_retries=3)
     def get_price_data(
         self, stock_code: str, days: int = 250, adjust: str = "qfq"
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """获取历史行情"""
         try:
             self._init_api()
             self._rate_limiter.block_until_ready()
             from datetime import datetime, timedelta
+
             end_date = datetime.now().strftime("%Y%m%d")
             start_date = (datetime.now() - timedelta(days=int(days * 1.5))).strftime("%Y%m%d")
 
@@ -116,11 +124,13 @@ class TushareSource(DataSource):
                 return None
 
             # 标准化列名
-            df = df.rename(columns={
-                "trade_date": "date",
-                "vol": "volume",
-                "pct_chg": "pct_change",
-            })
+            df = df.rename(
+                columns={
+                    "trade_date": "date",
+                    "vol": "volume",
+                    "pct_chg": "pct_change",
+                }
+            )
             df = df.sort_values("date").reset_index(drop=True)
             # 保留最后 days 条
             df = df.tail(days).reset_index(drop=True)
@@ -136,7 +146,7 @@ class TushareSource(DataSource):
             return None
 
     @retry(max_retries=3)
-    def get_realtime_price(self, stock_code: str) -> Optional[float]:
+    def get_realtime_price(self, stock_code: str) -> float | None:
         """获取最新收盘价"""
         try:
             self._init_api()
@@ -154,7 +164,7 @@ class TushareSource(DataSource):
     @retry(max_retries=3)
     def get_financial_statements(
         self, stock_code: str, statement_type: StatementType, periods: int = 4
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """获取财务报表（真实数据）"""
         try:
             self._init_api()
@@ -186,7 +196,7 @@ class TushareSource(DataSource):
             return None
 
     @retry(max_retries=3)
-    def get_financial_snapshot(self, stock_code: str) -> Optional[FinancialSnapshot]:
+    def get_financial_snapshot(self, stock_code: str) -> FinancialSnapshot | None:
         """获取财务快照 — 从真实报表计算核心指标"""
         try:
             self._init_api()
@@ -234,14 +244,22 @@ class TushareSource(DataSource):
                 data["profit_growth"] = None
 
             # 从利润表和资产负债表交叉验证 ROE
-            if income is not None and balance is not None and len(income) >= 1 and len(balance) >= 1:
+            if (
+                income is not None
+                and balance is not None
+                and len(income) >= 1
+                and len(balance) >= 1
+            ):
                 net_profit = self._safe_float(income.iloc[0].get("net_profit"))
                 total_equity = self._safe_float(balance.iloc[0].get("total_equity"))
                 prev_equity = (
                     self._safe_float(balance.iloc[1].get("total_equity"))
-                    if len(balance) >= 2 else total_equity
+                    if len(balance) >= 2
+                    else total_equity
                 )
-                avg_equity = (total_equity + prev_equity) / 2 if (total_equity + prev_equity) > 0 else None
+                avg_equity = (
+                    (total_equity + prev_equity) / 2 if (total_equity + prev_equity) > 0 else None
+                )
 
                 if net_profit and avg_equity and avg_equity > 0:
                     calc_roe = net_profit / avg_equity
@@ -280,7 +298,7 @@ class TushareSource(DataSource):
             return None
 
     @staticmethod
-    def _safe_float(value: Any) -> Optional[float]:
+    def _safe_float(value: Any) -> float | None:
         """安全转换为 float，None/NaN/异常值返回 None"""
         if value is None:
             return None

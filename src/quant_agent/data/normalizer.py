@@ -3,20 +3,27 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
-import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 # 标准列名映射（中文 → 英文）
 COLUMN_MAP = {
-    "日期": "date", "开盘": "open", "收盘": "close",
-    "最高": "high", "最低": "low", "成交量": "volume",
-    "成交额": "amount", "涨跌幅": "pct_change", "涨跌额": "change",
-    "换手率": "turnover", "振幅": "amplitude",
-    "trade_date": "date", "vol": "volume", "pct_chg": "pct_change",
+    "日期": "date",
+    "开盘": "open",
+    "收盘": "close",
+    "最高": "high",
+    "最低": "low",
+    "成交量": "volume",
+    "成交额": "amount",
+    "涨跌幅": "pct_change",
+    "涨跌额": "change",
+    "换手率": "turnover",
+    "振幅": "amplitude",
+    "trade_date": "date",
+    "vol": "volume",
+    "pct_chg": "pct_change",
 }
 
 REQUIRED_COLUMNS = ["date", "open", "high", "low", "close", "volume"]
@@ -50,10 +57,7 @@ def normalize_price_data(df: pd.DataFrame) -> pd.DataFrame:
     # 确保必要列存在
     missing = [col for col in REQUIRED_COLUMNS if col not in df.columns]
     if missing:
-        raise ValueError(
-            f"行情数据缺少必要列: {missing}. "
-            f"现有列: {list(df.columns)}"
-        )
+        raise ValueError(f"行情数据缺少必要列: {missing}. 现有列: {list(df.columns)}")
 
     # 按日期排序
     df = df.sort_values("date").reset_index(drop=True)
@@ -70,5 +74,3 @@ def clip_outliers(
     lower = series.quantile(lower_pct)
     upper = series.quantile(upper_pct)
     return series.clip(lower, upper)
-
-

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from ..agents.base import AgentResult
@@ -37,12 +37,12 @@ class StrategyContext:
     - 回测（CrossOverStrategy）：``price`` + ``prev_price`` + ``has_position``。
     """
 
-    results: Optional[list["AgentResult"]] = None
-    current_positions: Optional[dict[str, float]] = None  # {code: position_value}
-    current_equity: Optional[float] = None
-    current_date: Optional[str] = None  # YYYY-MM-DD
-    price: Optional[float] = None
-    prev_price: Optional[float] = None
+    results: list[AgentResult] | None = None
+    current_positions: dict[str, float] | None = None  # {code: position_value}
+    current_equity: float | None = None
+    current_date: str | None = None  # YYYY-MM-DD
+    price: float | None = None
+    prev_price: float | None = None
     has_position: bool = False
 
 
@@ -112,7 +112,11 @@ class ConsensusStrategy:
         # 仅计入成功的分析
         successful = [r for r in results if getattr(r, "success", False)]
         if not successful:
-            return Signal(signal="HOLD", confidence=0.0, metrics={"buy_count": 0, "sell_count": 0, "hold_count": 0})
+            return Signal(
+                signal="HOLD",
+                confidence=0.0,
+                metrics={"buy_count": 0, "sell_count": 0, "hold_count": 0},
+            )
 
         buy_count = sum(1 for r in successful if r.signal == "BUY")
         sell_count = sum(1 for r in successful if r.signal == "SELL")

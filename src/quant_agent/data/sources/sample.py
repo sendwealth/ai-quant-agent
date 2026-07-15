@@ -14,12 +14,11 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
-from ..sources.base import DataSource, FinancialSnapshot
 from ..normalizer import normalize_price_data
+from ..sources.base import DataSource, FinancialSnapshot
 from ..validators import validate_stock_code
 
 logger = logging.getLogger(__name__)
@@ -28,7 +27,7 @@ logger = logging.getLogger(__name__)
 class SamplePriceSource(DataSource):
     """本地样例数据源 — 仅读取内置真实样例，无任何合成/模拟数据"""
 
-    def __init__(self, settings=None, samples_dir: Optional[str] = None):
+    def __init__(self, settings=None, samples_dir: str | None = None):
         self.settings = settings
         if samples_dir is None and settings is not None:
             samples_dir = getattr(settings, "sample_data_dir", "data/samples")
@@ -48,16 +47,14 @@ class SamplePriceSource(DataSource):
 
     def get_price_data(
         self, stock_code: str, days: int = 250, adjust: str = "qfq"
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         stock_code = validate_stock_code(stock_code)
 
         bundled = self._price_dir / f"{stock_code}.parquet"
         if bundled.exists():
             try:
                 df = pd.read_parquet(bundled)
-                logger.info(
-                    "样例源：使用内置真实历史行情 %s (%d 行)", stock_code, len(df)
-                )
+                logger.info("样例源：使用内置真实历史行情 %s (%d 行)", stock_code, len(df))
                 return normalize_price_data(df)
             except Exception as e:
                 logger.warning("样例源：读取内置样例失败 %s: %s", stock_code, e)
@@ -66,7 +63,7 @@ class SamplePriceSource(DataSource):
         logger.info("样例源：无 %s 的内置样例行情，返回无数据", stock_code)
         return None
 
-    def get_realtime_price(self, stock_code: str) -> Optional[float]:
+    def get_realtime_price(self, stock_code: str) -> float | None:
         df = self.get_price_data(stock_code, days=5)
         if df is not None and not df.empty:
             return float(df["close"].iloc[-1])
@@ -74,7 +71,7 @@ class SamplePriceSource(DataSource):
 
     # ── 财务 ──
 
-    def get_financial_snapshot(self, stock_code: str) -> Optional[FinancialSnapshot]:
+    def get_financial_snapshot(self, stock_code: str) -> FinancialSnapshot | None:
         stock_code = validate_stock_code(stock_code)
 
         bundled = self.samples_dir / "financial" / f"{stock_code}.parquet"

@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
-
-import numpy as np
 import pandas as pd
 
-from ..strategy.indicators import rsi, macd, bollinger_bands, atr, ema, adx
+from ..strategy.indicators import adx, atr, bollinger_bands, ema, macd, rsi
 from ..thresholds import _Thresh, get_thresholds
-from .base import BaseAgent, AgentResult
+from .base import AgentResult, BaseAgent
 
 
 class TechnicalAgent(BaseAgent):
@@ -27,10 +24,13 @@ class TechnicalAgent(BaseAgent):
             df = self._get_price_data(stock_code, days)
             if df is None or df.empty:
                 return AgentResult(
-                    agent_name=self.name, stock_code=stock_code,
-                    signal="HOLD", confidence=0.0,
+                    agent_name=self.name,
+                    stock_code=stock_code,
+                    signal="HOLD",
+                    confidence=0.0,
                     reasoning="无法获取行情数据",
-                    success=False, error="NO_DATA",
+                    success=False,
+                    error="NO_DATA",
                 )
 
             close = df["close"]
@@ -114,26 +114,36 @@ class TechnicalAgent(BaseAgent):
                     "volatility": 1 - min(atr_val / (close.iloc[-1] * 0.05), 1.0),
                 },
             )
-            self._log_action("analysis_completed", stock_code=stock_code, signal=signal, confidence=confidence)
+            self._log_action(
+                "analysis_completed", stock_code=stock_code, signal=signal, confidence=confidence
+            )
             return result
 
         except Exception as e:
             self._logger.error(f"技术分析失败: {e}")
             self._log_action("analysis_failed", stock_code=stock_code, error=str(e))
             return AgentResult(
-                agent_name=self.name, stock_code=stock_code,
-                signal="HOLD", confidence=0.0, reasoning=f"分析失败: {e}",
-                success=False, error=str(e),
+                agent_name=self.name,
+                stock_code=stock_code,
+                signal="HOLD",
+                confidence=0.0,
+                reasoning=f"分析失败: {e}",
+                success=False,
+                error=str(e),
             )
 
-    def _get_price_data(self, stock_code: str, days: int) -> Optional[pd.DataFrame]:
+    def _get_price_data(self, stock_code: str, days: int) -> pd.DataFrame | None:
         if self.data_service is None:
             return None
         return self.data_service.get_price_data(stock_code, days)
 
     def _generate_signal(
-        self, rsi: float, macd_status: str, ema_trend: str,
-        vol_status: str, adx: float,
+        self,
+        rsi: float,
+        macd_status: str,
+        ema_trend: str,
+        vol_status: str,
+        adx: float,
     ) -> tuple[str, float, str]:
         t = self._thresh
         buy_score = 0.0

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from ..agents.execution import Order
 
@@ -32,9 +32,9 @@ class TradingService:
 
     def __init__(
         self,
-        execution: "ExecutionAgent",
-        risk: "RiskAgent",
-        notifier: Optional["EmailNotifier"] = None,
+        execution: ExecutionAgent,
+        risk: RiskAgent,
+        notifier: EmailNotifier | None = None,
     ):
         self.execution = execution
         self.risk = risk
@@ -42,10 +42,10 @@ class TradingService:
 
     def execute(
         self,
-        report: "AnalysisReport",
+        report: AnalysisReport,
         analysis_results,
-        current_date: Optional[str] = None,
-    ) -> Optional[Order]:
+        current_date: str | None = None,
+    ) -> Order | None:
         """根据报告里的共识信号显式下单。返回成交订单（若无则为 None）。"""
         risk_result = report.risk_result
         if risk_result is None:
@@ -62,7 +62,10 @@ class TradingService:
             if stop_order:
                 logger.warning(
                     "  Stop triggered for %s: %s %d @ %.2f",
-                    code, stop_order.direction, stop_order.shares, stop_order.filled_price,
+                    code,
+                    stop_order.direction,
+                    stop_order.shares,
+                    stop_order.filled_price,
                 )
                 self.risk.t1_tracker.clear(code)
 
@@ -79,11 +82,12 @@ class TradingService:
                     break
 
         all_results = list(analysis_results) + [risk_result]
-        order: Optional[Order] = None
+        order: Order | None = None
 
         if risk_result.signal == "BUY" and position_pct > 0 and current_price > 0:
             order = self.execution.execute_signal(
-                stock_code, "BUY",
+                stock_code,
+                "BUY",
                 position_pct=position_pct,
                 current_price=current_price,
                 stop_loss_pct=risk_result.metrics.get("stop_loss", -0.08),
@@ -91,20 +95,32 @@ class TradingService:
                 agent_results=all_results,
             )
             if order and order.status == "filled":
-                logger.info("  BUY executed: %s %d shares @ %.2f", stock_code, order.shares, order.filled_price)
+                logger.info(
+                    "  BUY executed: %s %d shares @ %.2f",
+                    stock_code,
+                    order.shares,
+                    order.filled_price,
+                )
                 self.risk.t1_tracker.record_buy(stock_code, current_date)
         elif risk_result.signal == "SELL":
             order = self.execution.execute_signal(
-                stock_code, "SELL",
+                stock_code,
+                "SELL",
                 current_price=current_price,
                 agent_results=all_results,
             )
             if order and order.status == "filled":
-                logger.info("  SELL executed: %s %d shares @ %.2f", stock_code, order.shares, order.filled_price)
+                logger.info(
+                    "  SELL executed: %s %d shares @ %.2f",
+                    stock_code,
+                    order.shares,
+                    order.filled_price,
+                )
                 self.risk.t1_tracker.clear(stock_code)
         else:
             self.execution.execute_signal(
-                stock_code, risk_result.signal,
+                stock_code,
+                risk_result.signal,
                 position_pct=position_pct,
                 current_price=current_price,
                 agent_results=all_results,

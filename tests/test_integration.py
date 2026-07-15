@@ -9,17 +9,14 @@ without network access or real API tokens.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, PropertyMock, patch
-from typing import Optional
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
-import pytest
 
-from quant_agent.agents.base import AgentResult
+from quant_agent.config import Settings
 from quant_agent.data.sources.base import FinancialSnapshot
 from quant_agent.orchestrator import AnalysisReport, Orchestrator
-
 
 # ---------------------------------------------------------------------------
 # Helpers -- realistic mock data factories
@@ -43,14 +40,16 @@ def make_uptrend_price_df(n_bars: int = 120, base_price: float = 200.0) -> pd.Da
     open_ = close - np.random.randn(n_bars) * 0.5
     volume = np.random.uniform(500_000, 2_000_000, n_bars)
 
-    return pd.DataFrame({
-        "date": dates.strftime("%Y%m%d"),
-        "open": open_,
-        "high": high,
-        "low": low,
-        "close": close,
-        "volume": volume,
-    })
+    return pd.DataFrame(
+        {
+            "date": dates.strftime("%Y%m%d"),
+            "open": open_,
+            "high": high,
+            "low": low,
+            "close": close,
+            "volume": volume,
+        }
+    )
 
 
 def make_downtrend_price_df(n_bars: int = 120, base_price: float = 200.0) -> pd.DataFrame:
@@ -73,89 +72,105 @@ def make_downtrend_price_df(n_bars: int = 120, base_price: float = 200.0) -> pd.
     open_ = close - np.random.randn(n_bars) * 0.5
     volume = np.random.uniform(500_000, 2_000_000, n_bars)
 
-    return pd.DataFrame({
-        "date": dates.strftime("%Y%m%d"),
-        "open": open_,
-        "high": high,
-        "low": low,
-        "close": close,
-        "volume": volume,
-    })
+    return pd.DataFrame(
+        {
+            "date": dates.strftime("%Y%m%d"),
+            "open": open_,
+            "high": high,
+            "low": low,
+            "close": close,
+            "volume": volume,
+        }
+    )
 
 
 def make_strong_financial_snapshot(stock_code: str = "300750") -> FinancialSnapshot:
     """Strong fundamentals: high ROE, low PE, low debt, high growth."""
-    return FinancialSnapshot(stock_code, {
-        "roe": 0.22,
-        "pe_ttm": 14.0,
-        "pb": 2.8,
-        "gross_margin": 0.42,
-        "net_margin": 0.18,
-        "debt_ratio": 0.30,
-        "current_ratio": 2.5,
-        "revenue_growth": 0.35,
-        "profit_growth": 0.40,
-        "price": 220.0,
-        "report_date": "2025-12-31",
-    })
+    return FinancialSnapshot(
+        stock_code,
+        {
+            "roe": 0.22,
+            "pe_ttm": 14.0,
+            "pb": 2.8,
+            "gross_margin": 0.42,
+            "net_margin": 0.18,
+            "debt_ratio": 0.30,
+            "current_ratio": 2.5,
+            "revenue_growth": 0.35,
+            "profit_growth": 0.40,
+            "price": 220.0,
+            "report_date": "2025-12-31",
+        },
+    )
 
 
 def make_weak_financial_snapshot(stock_code: str = "300750") -> FinancialSnapshot:
     """Weak fundamentals: low ROE, high PE, high debt, negative growth."""
-    return FinancialSnapshot(stock_code, {
-        "roe": 0.03,
-        "pe_ttm": 90.0,
-        "pb": 9.0,
-        "gross_margin": 0.12,
-        "net_margin": 0.01,
-        "debt_ratio": 0.88,
-        "current_ratio": 0.5,
-        "revenue_growth": -0.25,
-        "profit_growth": -0.40,
-        "price": 100.0,
-        "report_date": "2025-12-31",
-    })
+    return FinancialSnapshot(
+        stock_code,
+        {
+            "roe": 0.03,
+            "pe_ttm": 90.0,
+            "pb": 9.0,
+            "gross_margin": 0.12,
+            "net_margin": 0.01,
+            "debt_ratio": 0.88,
+            "current_ratio": 0.5,
+            "revenue_growth": -0.25,
+            "profit_growth": -0.40,
+            "price": 100.0,
+            "report_date": "2025-12-31",
+        },
+    )
 
 
 def make_mock_settings(tmp_path):
-    """Build a mock Settings object with sensible defaults for testing."""
-    settings = MagicMock()
-    settings.parquet_dir = str(tmp_path / "parquet")
-    settings.data_dir = str(tmp_path / "data")
-    settings.tushare_token = None
-    settings.akshare_timeout = 5
-    settings.fetch_max_workers = 1
-    settings.initial_capital = 100000.0
-    settings.max_position_pct = 0.20
-    settings.max_portfolio_risk = 0.80
-    settings.max_daily_loss_pct = -0.03
-    settings.default_stop_loss = -0.08
-    settings.default_take_profit_1 = 0.10
-    settings.default_take_profit_2 = 0.20
-    settings.commission_rate = 0.0003
-    settings.stamp_tax_rate = 0.001
-    settings.debug = True
-    # LLM — no API keys in tests → LLMClient will be None
-    settings.openai_api_key = None
-    settings.zhipu_api_key = None
-    settings.openai_model = "gpt-4o"
-    settings.zhipu_model = "glm-4"
-    settings.openai_base_url = "https://api.openai.com/v1"
-    settings.llm_timeout = 5
-    settings.llm_max_retries = 0
-    settings.email_enabled = False
-    settings.email_smtp_server = ""
-    settings.email_smtp_port = 465
-    settings.email_sender = ""
-    settings.email_password = ""
-    settings.email_recipients = ""
-    return settings
+    """Build a real ``Settings`` instance with test-friendly overrides.
+
+    Uses the actual pydantic ``Settings`` model (not a ``MagicMock``) so that
+    config-contract regressions surface as real errors. ``_env_file=None``
+    isolates the test from any local ``.env`` / environment overrides.
+    """
+    return Settings(
+        _env_file=None,
+        parquet_dir=str(tmp_path / "parquet"),
+        data_dir=str(tmp_path / "data"),
+        tushare_token=None,
+        akshare_timeout=5,
+        fetch_max_workers=1,
+        initial_capital=100000.0,
+        max_position_pct=0.20,
+        max_portfolio_risk=0.80,
+        max_daily_loss_pct=-0.03,
+        default_stop_loss=-0.08,
+        default_take_profit_1=0.10,
+        default_take_profit_2=0.20,
+        commission_rate=0.0003,
+        stamp_tax_rate=0.001,
+        debug=True,
+        # LLM — no API keys in tests → LLMClient will be None
+        openai_api_key=None,
+        zhipu_api_key=None,
+        openai_model="gpt-4o",
+        zhipu_model="glm-4",
+        openai_base_url="https://api.openai.com/v1",
+        llm_timeout=5,
+        llm_max_retries=0,
+        email_enabled=False,
+        email_smtp_server="",
+        email_smtp_port=465,
+        email_sender="",
+        email_password="",
+        email_recipients="",
+        persist_trading=False,
+        offline_mode=False,
+    )
 
 
 def build_orchestrator_with_mocks(
     mock_settings,
-    price_data: Optional[pd.DataFrame],
-    financial_snapshot: Optional[FinancialSnapshot],
+    price_data: pd.DataFrame | None,
+    financial_snapshot: FinancialSnapshot | None,
 ) -> Orchestrator:
     """Build an Orchestrator whose DataService is fully mocked.
 
@@ -165,8 +180,10 @@ def build_orchestrator_with_mocks(
 
     Also patches ``AuditLogger`` to avoid filesystem side-effects.
     """
-    with patch("quant_agent.orchestrator.DataService") as MockDS, \
-         patch("quant_agent.orchestrator.AuditLogger") as MockAudit:
+    with (
+        patch("quant_agent.orchestrator.DataService") as MockDS,
+        patch("quant_agent.orchestrator.AuditLogger") as MockAudit,
+    ):
         # Build a mock DataService instance
         mock_ds_instance = MagicMock()
         mock_ds_instance.get_price_data.return_value = price_data
@@ -478,7 +495,7 @@ class TestMultiStockAnalysis:
         # Each stock gets its own report
         assert len(results) == 3
         for code, report in results.items():
-            assert report.stock_code == code
+            assert report.stock_code == code  # noqa: B007
             assert report.fundamental_result is not None
             assert report.technical_result is not None
             assert report.risk_result is not None
@@ -550,9 +567,16 @@ class TestAnalysisReportStructure:
         d = report.to_dict()
 
         expected_keys = {
-            "stock_code", "timestamp", "signal", "confidence",
-            "position_pct", "fundamental", "technical", "risk",
-            "execution", "summary",
+            "stock_code",
+            "timestamp",
+            "signal",
+            "confidence",
+            "position_pct",
+            "fundamental",
+            "technical",
+            "risk",
+            "execution",
+            "summary",
         }
         assert expected_keys.issubset(d.keys())
 
@@ -566,6 +590,7 @@ class TestAnalysisReportStructure:
 
         # Should be parseable as an ISO timestamp
         from datetime import datetime
+
         datetime.fromisoformat(report.timestamp)
 
     def test_stock_code_preserved(self, tmp_path):
@@ -646,7 +671,7 @@ class TestConcurrentAnalysis:
         assert len(results) == len(codes)
 
         # Each result must be a valid AnalysisReport
-        for code, report in results.items():
+        for _code, report in results.items():
             assert isinstance(report, AnalysisReport)
             assert report.risk_result is not None
 

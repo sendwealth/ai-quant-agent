@@ -9,7 +9,6 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from ..orchestrator import AnalysisReport
 
@@ -18,9 +17,7 @@ logger = logging.getLogger(__name__)
 REPORTS_DIR = Path("data/reports")
 
 
-def save_report(
-    report: AnalysisReport, base_dir: str | Path = REPORTS_DIR
-) -> Path:
+def save_report(report: AnalysisReport, base_dir: str | Path = REPORTS_DIR) -> Path:
     """保存分析报告为 JSON，并更新索引。
 
     Returns:
@@ -81,7 +78,7 @@ def list_reports(base_dir: str | Path = REPORTS_DIR) -> list[dict]:
     return sorted(index, key=lambda x: x.get("saved_at", ""), reverse=True)
 
 
-def load_report(file_name: str, base_dir: str | Path = REPORTS_DIR) -> Optional[dict]:
+def load_report(file_name: str, base_dir: str | Path = REPORTS_DIR) -> dict | None:
     """按文件名加载报告 JSON"""
     base_dir = Path(base_dir)
     path = base_dir / file_name
@@ -94,7 +91,7 @@ def load_report(file_name: str, base_dir: str | Path = REPORTS_DIR) -> Optional[
         return None
 
 
-def latest_for_stock(stock_code: str, base_dir: str | Path = REPORTS_DIR) -> Optional[dict]:
+def latest_for_stock(stock_code: str, base_dir: str | Path = REPORTS_DIR) -> dict | None:
     """获取某股票最近一次报告"""
     for entry in list_reports(base_dir):
         if entry.get("stock_code") == stock_code:

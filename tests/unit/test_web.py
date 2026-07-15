@@ -11,9 +11,13 @@ from http.server import ThreadingHTTPServer
 
 import pytest
 
-from quant_agent.web.server import _Handler, run_web
+from quant_agent.web.server import _Handler
 
 PORT = 8765
+
+# Local HTTP server tests: allow loopback connections while the global
+# --disable-socket policy blocks all other network access (P0-03).
+pytestmark = [pytest.mark.allow_hosts(["127.0.0.1", "localhost"])]
 
 
 @pytest.fixture(scope="module")
@@ -113,7 +117,7 @@ def test_screen_returns_stock_names():
     """选股结果应附带股票名称（离线默认池通过内置映射解析）。"""
     import pandas as pd
 
-    from quant_agent.screener.engine import ScreeningEngine, STOCK_NAME_MAP
+    from quant_agent.screener.engine import STOCK_NAME_MAP, ScreeningEngine
 
     def _fake_multi_price(codes, days=120, **_):
         out = {}
@@ -202,4 +206,3 @@ def test_search_endpoint(server):
     status, body = _get(f"{server}/api/search?q=&limit=5")
     assert status == 200
     assert body["results"] == []
-

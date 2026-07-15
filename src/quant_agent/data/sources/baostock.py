@@ -6,7 +6,6 @@ import logging
 import time
 from datetime import datetime, timedelta
 from functools import wraps
-from typing import Optional
 
 import pandas as pd
 
@@ -24,6 +23,7 @@ _RETRYABLE = (ConnectionError, TimeoutError, OSError)
 
 def _retry(max_retries: int = 3):
     """Decorator: retry transient network/IO errors with exponential backoff."""
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -41,7 +41,9 @@ def _retry(max_retries: int = 3):
                         )
                         time.sleep(wait)
             raise last_err  # type: ignore
+
         return wrapper
+
     return decorator
 
 
@@ -80,6 +82,7 @@ class BaoStockSource(DataSource):
     def available(self) -> bool:
         try:
             import baostock  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -131,7 +134,7 @@ class BaoStockSource(DataSource):
 
     def get_price_data(
         self, stock_code: str, days: int = 250, adjust: str = "qfq"
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """获取历史日线行情"""
         try:
             self._rate_limiter.block_until_ready()
@@ -153,13 +156,11 @@ class BaoStockSource(DataSource):
     @_retry(max_retries=2)
     def _get_price_data_impl(
         self, stock_code: str, days: int = 250, adjust: str = "qfq"
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """Internal price data fetch with retry."""
         self._ensure_logged_in()
         end = datetime.now().strftime("%Y-%m-%d")
-        start = (datetime.now() - timedelta(days=int(days * 1.5))).strftime(
-            "%Y-%m-%d"
-        )
+        start = (datetime.now() - timedelta(days=int(days * 1.5))).strftime("%Y-%m-%d")
 
         adjust_flag = _ADJUST_MAP.get(adjust, "3")
         bs_code = self._to_bs_code(stock_code)
@@ -181,8 +182,14 @@ class BaoStockSource(DataSource):
         df = pd.DataFrame(
             rows,
             columns=[
-                "date", "open", "high", "low", "close",
-                "volume", "amount", "turnover",
+                "date",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+                "amount",
+                "turnover",
             ],
         )
         df = df[df["date"] != ""].reset_index(drop=True)
@@ -192,7 +199,7 @@ class BaoStockSource(DataSource):
         df["amount"] = df["amount"].astype(float) / 1000
         return df
 
-    def get_realtime_price(self, stock_code: str) -> Optional[float]:
+    def get_realtime_price(self, stock_code: str) -> float | None:
         """BaoStock 不支持实时行情"""
         return None
 

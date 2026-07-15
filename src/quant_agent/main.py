@@ -9,9 +9,8 @@
 """
 
 import logging
-import warnings
 
-from quant_agent.orchestrator import Orchestrator, AnalysisReport
+from quant_agent.orchestrator import AnalysisReport, Orchestrator
 
 
 def run_pipeline(stock_code: str = "300750", days: int = 250) -> dict:
@@ -63,12 +62,14 @@ if __name__ == "__main__":
     # Set offline mode via environment variable (picked up by Settings)
     if args.offline:
         import os
+
         os.environ["QUANT_OFFLINE_MODE"] = "true"
 
     if args.preload:
         # Pre-download data to local cache
         from quant_agent.config import get_settings
         from quant_agent.data.service import DataService
+
         settings = get_settings()
         svc = DataService(settings)
         codes = [c.strip() for c in settings.preload_stocks.split(",") if c.strip()]
@@ -86,6 +87,7 @@ if __name__ == "__main__":
     elif args.prompt:
         # 自然语言分析
         from quant_agent.llm.client import LLMError
+
         orch = Orchestrator()
         try:
             report = orch.analyze_prompt(args.prompt)
@@ -116,14 +118,18 @@ if __name__ == "__main__":
             print(f"\n{'=' * 90}")
             print(f"AI Quant Agent v3.0 — 智能选股 Top {len(top)}")
             print(f"{'=' * 90}")
-            print(f"{'#':>2} {'代码':<8} {'价格':>8} {'评分':>5} "
-                  f"{'技术':>4} {'动量':>4} {'流动性':>4} {'基本':>4}")
+            print(
+                f"{'#':>2} {'代码':<8} {'价格':>8} {'评分':>5} "
+                f"{'技术':>4} {'动量':>4} {'流动性':>4} {'基本':>4}"
+            )
             print("-" * 90)
             for i, s in enumerate(top):
-                print(f"{i + 1:>2} {s.stock_code:<8} {s.price:>8.2f} "
-                      f"{s.total_score:>5.1f} {s.technical_score:>4.0f} "
-                      f"{s.momentum_score:>4.0f} {s.liquidity_score:>4.0f} "
-                      f"{s.fundamental_score:>4.0f}")
+                print(
+                    f"{i + 1:>2} {s.stock_code:<8} {s.price:>8.2f} "
+                    f"{s.total_score:>5.1f} {s.technical_score:>4.0f} "
+                    f"{s.momentum_score:>4.0f} {s.liquidity_score:>4.0f} "
+                    f"{s.fundamental_score:>4.0f}"
+                )
             print("=" * 90)
             codes = ", ".join(s.stock_code for s in top)
             print(f"\n入选: {codes}")

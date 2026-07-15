@@ -20,28 +20,40 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 
 from .config import get_settings
 from .orchestrator import Orchestrator
-from .screener.stock_names import get_stock_name, update_stock_names
 from .reporting import (
-    render_markdown,
-    render_html,
-    plot_price_chart,
-    save_report,
+    latest_for_stock,
     list_reports,
     load_report,
-    latest_for_stock,
+    plot_price_chart,
+    render_html,
+    render_markdown,
+    save_report,
 )
+from .screener.stock_names import get_stock_name, update_stock_names
 
 app = typer.Typer(
     help="AI Quant Agent v3.1 — LLM 增强的 A 股量化分析 CLI",
     no_args_is_help=True,
     add_completion=True,
 )
+
+
+@app.callback(invoke_without_command=True)
+def _main_callback(
+    version: bool = typer.Option(False, "--version", "-V", help="显示版本号并退出"),
+):
+    """AI Quant Agent CLI 入口。"""
+    if version:
+        from importlib.metadata import version as _pkg_version
+
+        typer.echo(f"ai-quant-agent {_pkg_version('ai-quant-agent')}")
+        raise typer.Exit()
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -74,7 +86,9 @@ def analyze(
     fmt: str = typer.Option("md", "--format", help="报告格式: md / html"),
     chart: bool = typer.Option(False, "--chart/--no-chart", help="生成价格走势图"),
     offline: bool = typer.Option(False, "--offline", help="离线模式（仅用本地/样例数据）"),
-    execute: bool = typer.Option(True, "--execute/--no-execute", help="根据共识信号显式下单（默认下单；预览用 --no-execute）"),
+    execute: bool = typer.Option(
+        True, "--execute/--no-execute", help="根据共识信号显式下单（默认下单；预览用 --no-execute）"
+    ),
     out_dir: str = typer.Option("data/reports", "--out-dir", help="报告输出目录"),
 ):
     """单股深度分析"""
@@ -124,7 +138,9 @@ def analyze(
 def screen(
     top: int = typer.Option(10, "--top", "-n", help="选股数量"),
     full_scan: bool = typer.Option(False, "--full-scan", help="全市场扫描（较慢）"),
-    fundamentals: bool = typer.Option(False, "--fundamentals/--no-fundamentals", help="含基本面评分"),
+    fundamentals: bool = typer.Option(
+        False, "--fundamentals/--no-fundamentals", help="含基本面评分"
+    ),
     deep: bool = typer.Option(False, "--deep", help="对 Top N 进行深度分析"),
     report: bool = typer.Option(False, "--report/--no-report", help="保存选股报告"),
 ):
@@ -203,7 +219,7 @@ def update_names():
         typer.echo(f"[完成] 已更新 {n} 条股票名称到 data/stock_names.json")
     except Exception as e:  # noqa: BLE001
         typer.echo(f"[失败] 刷新股票名称失败: {e}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -280,18 +296,7 @@ def report(
 
 
 def render_markdown_from_dict(data: dict) -> str:
-    """将历史报告 dict 渲染为 Markdown（复用渲染器需 AnalysisReport，这里轻量重建）"""
-    from .orchestrator import AnalysisReport
-
-    try:
-        rep = AnalysisReport(
-            stock_code=data.get("stock_code", "?"),
-            timestamp=data.get("timestamp", ""),
-        )
-        # 直接复用 to_dict 往返不完美，简化输出关键字段
-    except Exception:
-        rep = None
-    # 简单可读输出
+    """将历史报告 dict 渲染为 Markdown（轻量重建，不依赖完整 AnalysisReport）"""
     lines = [
         f"# 历史报告 — {data.get('stock_code', '?')}",
         f"> 时间: {data.get('timestamp', '')}",
@@ -326,9 +331,7 @@ def init(
         tushare = typer.prompt("Tushare token（留空=使用免费源）", default="")
         openai = typer.prompt("OpenAI API key（留空=离线规则增强）", default="")
         zhipu = typer.prompt("智谱 API key（留空跳过）", default="")
-        local_url = typer.prompt(
-            "本地模型 base_url（Ollama 等，留空跳过）", default=""
-        )
+        local_url = typer.prompt("本地模型 base_url（Ollama 等，留空跳过）", default="")
         local_model = typer.prompt("本地模型名（留空跳过）", default="")
 
         lines = [
@@ -350,7 +353,7 @@ def init(
         typer.echo(f"配置加载成功：app={settings.app_name}")
     except Exception as e:
         typer.echo(f"[配置校验失败] {e}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
     # 下载样例
     if download_samples:

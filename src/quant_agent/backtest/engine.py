@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -75,9 +74,9 @@ class BacktestEngine:
     def __init__(
         self,
         initial_capital: float = 100000.0,
-        commission: Optional[CommissionModel] = None,
-        slippage: Optional[SlippageModel] = None,
-        strategy: Optional[Strategy] = None,
+        commission: CommissionModel | None = None,
+        slippage: SlippageModel | None = None,
+        strategy: Strategy | None = None,
     ):
         self.initial_capital = initial_capital
         self.commission = commission or CommissionModel()
@@ -87,9 +86,9 @@ class BacktestEngine:
     def run(
         self,
         price_data: pd.DataFrame,
-        signals: Optional[pd.Series] = None,
-        benchmark: Optional[pd.Series] = None,
-        strategy: Optional[Strategy] = None,
+        signals: pd.Series | None = None,
+        benchmark: pd.Series | None = None,
+        strategy: Strategy | None = None,
     ) -> BacktestResult:
         """Run backtest.
 
@@ -128,10 +127,10 @@ class BacktestEngine:
         # Align signals and prices
         signal_len = len(signals) if signals is not None else len(price_data)
         min_len = min(len(price_data), signal_len)
-        dates = price_data["date"].iloc[:min_len]
         closes = price_data["close"].iloc[:min_len]
         signal_values = (
-            signals.iloc[:min_len] if (signals is not None and isinstance(signals, pd.Series))
+            signals.iloc[:min_len]
+            if (signals is not None and isinstance(signals, pd.Series))
             else None
         )
 
@@ -140,15 +139,12 @@ class BacktestEngine:
         has_position = False
 
         for i in range(min_len):
-            date = str(dates.iloc[i])
             price = float(closes.iloc[i])
             portfolio.update_price(stock_code, price)
 
             # 决定当日信号：优先用注入的 Strategy，否则用 signals 序列
             if active_strategy is not None:
-                ctx = StrategyContext(
-                    price=price, prev_price=prev_price, has_position=has_position
-                )
+                ctx = StrategyContext(price=price, prev_price=prev_price, has_position=has_position)
                 s = active_strategy.generate_signal(ctx)
                 sig = 1 if s.signal == "BUY" else (-1 if s.signal == "SELL" else 0)
             else:
@@ -182,7 +178,7 @@ class BacktestEngine:
         return self._calculate_metrics(portfolio, benchmark)
 
     def _calculate_metrics(
-        self, portfolio: Portfolio, benchmark: Optional[pd.Series] = None
+        self, portfolio: Portfolio, benchmark: pd.Series | None = None
     ) -> BacktestResult:
         """Calculate performance metrics."""
         result = BacktestResult(
@@ -227,7 +223,9 @@ class BacktestEngine:
         result.sortino_ratio = result.annual_return / downside_vol
 
         # Calmar
-        result.calmar_ratio = result.annual_return / abs(result.max_drawdown) if result.max_drawdown != 0 else 0.0
+        result.calmar_ratio = (
+            result.annual_return / abs(result.max_drawdown) if result.max_drawdown != 0 else 0.0
+        )
 
         # Trade statistics
         closed = portfolio.closed_trades
@@ -238,11 +236,10 @@ class BacktestEngine:
             result.win_trades = len(wins)
             result.lose_trades = len(losses)
             result.win_rate = len(wins) / len(closed) if closed else 0.0
-            result.avg_win = np.mean([t.pnl for t in wins]) if wins else 0.0
-            result.avg_loss = np.mean([t.pnl for t in losses]) if losses else 0.0
+            result.avg_win = float(np.mean([t.pnl for t in wins])) if wins else 0.0
+            result.avg_loss = float(np.mean([t.pnl for t in losses])) if losses else 0.0
             result.profit_factor = (
-                sum(t.pnl for t in wins) / abs(sum(t.pnl for t in losses))
-                if losses else 0.0
+                sum(t.pnl for t in wins) / abs(sum(t.pnl for t in losses)) if losses else 0.0
             )
 
             # Max consecutive losses

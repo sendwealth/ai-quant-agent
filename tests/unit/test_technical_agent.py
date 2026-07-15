@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
@@ -11,10 +11,10 @@ import pytest
 from quant_agent.agents.base import AgentResult
 from quant_agent.agents.technical import TechnicalAgent
 
-
 # ---------------------------------------------------------------------------
 # Helper: 生成各种价格模式的 DataFrame
 # ---------------------------------------------------------------------------
+
 
 def _make_df(
     closes: list[float],
@@ -37,23 +37,27 @@ def _make_df(
     else:
         vol = np.full(n, base_volume)
 
-    return pd.DataFrame({
-        "close":  closes_arr,
-        "high":   closes_arr + high_offset,
-        "low":    np.maximum(closes_arr - low_offset, 0.01),
-        "volume": vol,
-    })
+    return pd.DataFrame(
+        {
+            "close": closes_arr,
+            "high": closes_arr + high_offset,
+            "low": np.maximum(closes_arr - low_offset, 0.01),
+            "volume": vol,
+        }
+    )
 
 
-def _uptrend_df(n: int = 250, start: float = 50.0, step: float = 0.5,
-                vol_base: float = 1_000_000.0) -> pd.DataFrame:
+def _uptrend_df(
+    n: int = 250, start: float = 50.0, step: float = 0.5, vol_base: float = 1_000_000.0
+) -> pd.DataFrame:
     """平稳上升趋势 DataFrame"""
     closes = start + np.arange(n) * step
     return _make_df(closes.tolist(), volumes=(np.full(n, vol_base).tolist()))
 
 
-def _downtrend_df(n: int = 250, start: float = 200.0, step: float = 0.5,
-                  vol_base: float = 1_000_000.0) -> pd.DataFrame:
+def _downtrend_df(
+    n: int = 250, start: float = 200.0, step: float = 0.5, vol_base: float = 1_000_000.0
+) -> pd.DataFrame:
     """平稳下降趋势 DataFrame"""
     closes = start - np.arange(n) * step
     closes = np.maximum(closes, 5.0)  # keep positive
@@ -65,8 +69,9 @@ def _flat_df(n: int = 250, price: float = 100.0) -> pd.DataFrame:
     return _make_df([price] * n)
 
 
-def _volatile_df(n: int = 250, base: float = 100.0, amp: float = 10.0,
-                 seed: int = 42) -> pd.DataFrame:
+def _volatile_df(
+    n: int = 250, base: float = 100.0, amp: float = 10.0, seed: int = 42
+) -> pd.DataFrame:
     """高波动 DataFrame -- 正弦叠加噪声"""
     rng = np.random.default_rng(seed)
     t = np.arange(n, dtype=float)
@@ -186,8 +191,11 @@ class TestGenerateSignal:
     def test_strong_buy_all_bullish(self):
         agent = self._make_agent()
         signal, conf, reason = agent._generate_signal(
-            rsi=20.0, macd_status="金叉", ema_trend="上升",
-            vol_status="放量", adx=30.0,
+            rsi=20.0,
+            macd_status="金叉",
+            ema_trend="上升",
+            vol_status="放量",
+            adx=30.0,
         )
         assert signal == "BUY"
         assert conf == 0.80
@@ -198,8 +206,11 @@ class TestGenerateSignal:
     def test_strong_sell_all_bearish(self):
         agent = self._make_agent()
         signal, conf, reason = agent._generate_signal(
-            rsi=80.0, macd_status="死叉", ema_trend="下降",
-            vol_status="放量", adx=30.0,
+            rsi=80.0,
+            macd_status="死叉",
+            ema_trend="下降",
+            vol_status="放量",
+            adx=30.0,
         )
         assert signal == "SELL"
         assert conf == 0.75
@@ -211,8 +222,11 @@ class TestGenerateSignal:
         """RSI 中性 + 金叉 + 下降 (互相抵消)"""
         agent = self._make_agent()
         signal, conf, reason = agent._generate_signal(
-            rsi=50.0, macd_status="金叉", ema_trend="下降",
-            vol_status="正常", adx=20.0,
+            rsi=50.0,
+            macd_status="金叉",
+            ema_trend="下降",
+            vol_status="正常",
+            adx=20.0,
         )
         # RSI 50 -> buy+=0, sell+=0; 金叉 -> buy+=2; 下降 -> sell+=1.5
         # diff = 2.0 - 1.5 = 0.5 -> in (-1, 1) -> HOLD
@@ -224,8 +238,11 @@ class TestGenerateSignal:
         """RSI < 45 偏多 + 死叉 + 上升, 大致抵消"""
         agent = self._make_agent()
         signal, conf, reason = agent._generate_signal(
-            rsi=40.0, macd_status="死叉", ema_trend="上升",
-            vol_status="正常", adx=20.0,
+            rsi=40.0,
+            macd_status="死叉",
+            ema_trend="上升",
+            vol_status="正常",
+            adx=20.0,
         )
         # RSI 40 -> buy+=0.5; 死叉 -> sell+=2; 上升 -> buy+=1.5
         # diff = 2.0 - 2.0 = 0 -> HOLD
@@ -237,16 +254,22 @@ class TestGenerateSignal:
         """RSI 偏低 + 金叉 + 下降 (差异在 1~3 之间)"""
         agent = self._make_agent()
         signal, conf, reason = agent._generate_signal(
-            rsi=35.0, macd_status="金叉", ema_trend="下降",
-            vol_status="正常", adx=20.0,
+            rsi=35.0,
+            macd_status="金叉",
+            ema_trend="下降",
+            vol_status="正常",
+            adx=20.0,
         )
         # RSI 35 -> buy+=0; 金叉 -> buy+=2; 下降 -> sell+=1.5
         # diff = 2.0 - 1.5 = 0.5 -> actually HOLD
         # Let me adjust: RSI 42 -> buy+=0.5
         # diff = 2.5 - 1.5 = 1.0 -> weak BUY
         signal2, conf2, reason2 = agent._generate_signal(
-            rsi=42.0, macd_status="金叉", ema_trend="下降",
-            vol_status="正常", adx=20.0,
+            rsi=42.0,
+            macd_status="金叉",
+            ema_trend="下降",
+            vol_status="正常",
+            adx=20.0,
         )
         assert signal2 == "BUY"
         assert conf2 == 0.65
@@ -257,8 +280,11 @@ class TestGenerateSignal:
     def test_weak_sell(self):
         agent = self._make_agent()
         signal, conf, reason = agent._generate_signal(
-            rsi=65.0, macd_status="死叉", ema_trend="上升",
-            vol_status="正常", adx=20.0,
+            rsi=65.0,
+            macd_status="死叉",
+            ema_trend="上升",
+            vol_status="正常",
+            adx=20.0,
         )
         # RSI 65 -> sell+=0.5; 死叉 -> sell+=2; 上升 -> buy+=1.5
         # diff = 1.5 - 2.5 = -1.0 -> weak SELL
@@ -274,25 +300,37 @@ class TestGenerateSignal:
         # Without ADX: buy=2(golden)+0.5(rsi<45)+1.5(uptrend)=4.0, sell=0
         # diff = 4.0 -> strong BUY with conf 0.80
         signal_no_adx, _, _ = agent._generate_signal(
-            rsi=42.0, macd_status="金叉", ema_trend="上升",
-            vol_status="正常", adx=10.0,
+            rsi=42.0,
+            macd_status="金叉",
+            ema_trend="上升",
+            vol_status="正常",
+            adx=10.0,
         )
         # With ADX=30: buy = 4.0*1.2 = 4.8, sell = 0*1.2 = 0
         # diff = 4.8 -> strong BUY with conf 0.80
         signal_with_adx, conf_with_adx, _ = agent._generate_signal(
-            rsi=42.0, macd_status="金叉", ema_trend="上升",
-            vol_status="正常", adx=30.0,
+            rsi=42.0,
+            macd_status="金叉",
+            ema_trend="上升",
+            vol_status="正常",
+            adx=30.0,
         )
         assert signal_no_adx == "BUY"
         assert signal_with_adx == "BUY"
         # ADX amplification makes the diff larger: reason should reflect that
         _, _, reason_no = agent._generate_signal(
-            rsi=42.0, macd_status="金叉", ema_trend="上升",
-            vol_status="正常", adx=10.0,
+            rsi=42.0,
+            macd_status="金叉",
+            ema_trend="上升",
+            vol_status="正常",
+            adx=10.0,
         )
         _, _, reason_with = agent._generate_signal(
-            rsi=42.0, macd_status="金叉", ema_trend="上升",
-            vol_status="正常", adx=30.0,
+            rsi=42.0,
+            macd_status="金叉",
+            ema_trend="上升",
+            vol_status="正常",
+            adx=30.0,
         )
         assert "4.0" in reason_no
         assert "4.8" in reason_with
@@ -306,8 +344,11 @@ class TestGenerateSignal:
         # Without 放量: buy=5.5, sell=0, diff=5.5
         # With 放量: buy=5.5+1=6.5, diff=6.5
         signal, conf, reason = agent._generate_signal(
-            rsi=20.0, macd_status="金叉", ema_trend="上升",
-            vol_status="放量", adx=20.0,
+            rsi=20.0,
+            macd_status="金叉",
+            ema_trend="上升",
+            vol_status="放量",
+            adx=20.0,
         )
         assert signal == "BUY"
         assert "6.5" in reason
@@ -316,8 +357,11 @@ class TestGenerateSignal:
         """放量 + 卖方优势 -> 额外加 1 分"""
         agent = self._make_agent()
         signal, conf, reason = agent._generate_signal(
-            rsi=80.0, macd_status="死叉", ema_trend="下降",
-            vol_status="放量", adx=20.0,
+            rsi=80.0,
+            macd_status="死叉",
+            ema_trend="下降",
+            vol_status="放量",
+            adx=20.0,
         )
         # RSI 80 -> sell+=2; 死叉 -> sell+=2; 下降 -> sell+=1.5
         # 放量 + sell > buy -> sell += 1 => total sell = 6.5
@@ -328,8 +372,11 @@ class TestGenerateSignal:
         """成交量正常时不会额外加分"""
         agent = self._make_agent()
         signal, _, reason = agent._generate_signal(
-            rsi=20.0, macd_status="金叉", ema_trend="上升",
-            vol_status="正常", adx=20.0,
+            rsi=20.0,
+            macd_status="金叉",
+            ema_trend="上升",
+            vol_status="正常",
+            adx=20.0,
         )
         # buy = 2 + 2 + 1.5 = 5.5, no extra
         assert "5.5" in reason
@@ -338,27 +385,36 @@ class TestGenerateSignal:
         """缩量不会加分"""
         agent = self._make_agent()
         signal, _, reason = agent._generate_signal(
-            rsi=20.0, macd_status="金叉", ema_trend="上升",
-            vol_status="缩量", adx=20.0,
+            rsi=20.0,
+            macd_status="金叉",
+            ema_trend="上升",
+            vol_status="缩量",
+            adx=20.0,
         )
         assert "5.5" in reason
 
     # ---- RSI boundary values ----
 
-    @pytest.mark.parametrize("rsi_val,expected_buy_add", [
-        (29.0, 2.0),    # < 30: strong buy
-        (44.0, 0.5),    # < 45: weak buy
-        (50.0, 0.0),    # neutral: nothing
-        (61.0, 0.5),    # > 60: weak sell added to sell_score
-        (71.0, 2.0),    # > 70: strong sell added to sell_score
-    ])
+    @pytest.mark.parametrize(
+        "rsi_val,expected_buy_add",
+        [
+            (29.0, 2.0),  # < 30: strong buy
+            (44.0, 0.5),  # < 45: weak buy
+            (50.0, 0.0),  # neutral: nothing
+            (61.0, 0.5),  # > 60: weak sell added to sell_score
+            (71.0, 2.0),  # > 70: strong sell added to sell_score
+        ],
+    )
     def test_rsi_scoring_boundaries(self, rsi_val, expected_buy_add):
         """验证 RSI 评分边界"""
         agent = self._make_agent()
         # Use 金叉+上升 to make buy_score > sell_score, then check diff
         signal, _, reason = agent._generate_signal(
-            rsi=rsi_val, macd_status="金叉", ema_trend="上升",
-            vol_status="正常", adx=20.0,
+            rsi=rsi_val,
+            macd_status="金叉",
+            ema_trend="上升",
+            vol_status="正常",
+            adx=20.0,
         )
         # buy = expected_buy_add + 2(金叉) + 1.5(上升) = 3.5 + expected_buy_add
         # sell = 0
@@ -371,16 +427,22 @@ class TestGenerateSignal:
     def test_ema_trend_rising(self):
         agent = self._make_agent()
         signal, _, _ = agent._generate_signal(
-            rsi=50.0, macd_status="金叉", ema_trend="上升",
-            vol_status="正常", adx=20.0,
+            rsi=50.0,
+            macd_status="金叉",
+            ema_trend="上升",
+            vol_status="正常",
+            adx=20.0,
         )
         assert signal == "BUY"
 
     def test_ema_trend_falling(self):
         agent = self._make_agent()
         signal, _, _ = agent._generate_signal(
-            rsi=50.0, macd_status="金叉", ema_trend="下降",
-            vol_status="正常", adx=20.0,
+            rsi=50.0,
+            macd_status="金叉",
+            ema_trend="下降",
+            vol_status="正常",
+            adx=20.0,
         )
         # buy=2, sell=1.5, diff=0.5 -> HOLD
         assert signal == "HOLD"
@@ -667,6 +729,7 @@ class TestTechnicalAgentStructure:
 
     def test_inherits_base_agent(self):
         from quant_agent.agents.base import BaseAgent
+
         agent = TechnicalAgent()
         assert isinstance(agent, BaseAgent)
 
@@ -700,6 +763,7 @@ class TestTechnicalAgentWithEventBus:
     def test_with_event_bus_attached(self):
         """Agent 接收 event_bus kwarg 不应报错"""
         from quant_agent.events.bus import EventBus
+
         bus = EventBus()
         mock_ds = MagicMock()
         mock_ds.get_price_data.return_value = _uptrend_df(250)
@@ -719,12 +783,15 @@ class TestTechnicalAgentWithEventBus:
 class TestTechnicalAgentDifferentStocks:
     """测试不同股票代码"""
 
-    @pytest.mark.parametrize("stock_code", [
-        "300750",   # 创业板
-        "600519",   # 沪市
-        "000858",   # 深市
-        "830799",   # 北交所
-    ])
+    @pytest.mark.parametrize(
+        "stock_code",
+        [
+            "300750",  # 创业板
+            "600519",  # 沪市
+            "000858",  # 深市
+            "830799",  # 北交所
+        ],
+    )
     def test_various_stock_codes(self, stock_code):
         mock_ds = MagicMock()
         mock_ds.get_price_data.return_value = _uptrend_df(250)

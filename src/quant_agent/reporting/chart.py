@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
@@ -20,7 +19,7 @@ def plot_price_chart(
     price_df: pd.DataFrame,
     report: AnalysisReport,
     output_path: str | Path,
-    title: Optional[str] = None,
+    title: str | None = None,
 ) -> str:
     """绘制收盘价走势图并标注最终信号。
 
@@ -38,11 +37,11 @@ def plot_price_chart(
 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-    except ImportError:
+    except ImportError as err:
         raise RuntimeError(
             "未安装 matplotlib，无法生成图表。请运行 `uv add matplotlib` 或 "
             "`pip install matplotlib` 后重试。"
-        )
+        ) from err
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -61,9 +60,12 @@ def plot_price_chart(
     ax.set_title(title or f"{report.stock_code} - Signal: {signal}")
     ax.annotate(
         f"Signal: {signal}",
-        xy=(0.02, 0.95), xycoords="axes fraction",
-        color=color, fontsize=12, fontweight="bold",
-        bbox=dict(boxstyle="round", fc="white", ec=color),
+        xy=(0.02, 0.95),
+        xycoords="axes fraction",
+        color=color,
+        fontsize=12,
+        fontweight="bold",
+        bbox={"boxstyle": "round", "fc": "white", "ec": color},
     )
 
     fig.tight_layout()

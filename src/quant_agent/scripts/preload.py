@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import time
 from pathlib import Path
 
 
@@ -74,16 +73,10 @@ def preload_financial_data(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Pre-download stock data")
-    parser.add_argument(
-        "--stocks", help="Comma-separated stock codes (e.g. 300750,002475)"
-    )
-    parser.add_argument(
-        "--from-file", help="File with one stock code per line"
-    )
+    parser.add_argument("--stocks", help="Comma-separated stock codes (e.g. 300750,002475)")
+    parser.add_argument("--from-file", help="File with one stock code per line")
     parser.add_argument("--days", type=int, default=250, help="Price history days")
-    parser.add_argument(
-        "--price-only", action="store_true", help="Only download price data"
-    )
+    parser.add_argument("--price-only", action="store_true", help="Only download price data")
     parser.add_argument(
         "--financial-only", action="store_true", help="Only download financial data"
     )
@@ -101,6 +94,7 @@ def main() -> None:
     else:
         # Use default from config
         from quant_agent.config import get_settings
+
         settings = get_settings()
         codes = [c.strip() for c in settings.preload_stocks.split(",") if c.strip()]
 
@@ -116,8 +110,10 @@ def main() -> None:
     settings = get_settings()
     service = DataService(settings)
 
-    price_ok, price_failed = 0, []
-    fin_ok, fin_failed = 0, []
+    price_ok = 0
+    price_failed: list[str] = []
+    fin_ok = 0
+    fin_failed: list[str] = []
 
     if not args.financial_only:
         print("\n--- Price Data ---")

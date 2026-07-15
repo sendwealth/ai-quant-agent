@@ -5,10 +5,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from quant_agent.agents.base import AgentResult
-from quant_agent.agents.risk import RiskAgent, T1Tracker, DailyPnLTracker
-
+from quant_agent.agents.risk import DailyPnLTracker, RiskAgent, T1Tracker
 
 # ── T+1 Tracker ─────────────────────────────────────────────────────────────
+
 
 class TestT1Tracker:
     def test_can_sell_after_t1(self):
@@ -37,6 +37,7 @@ class TestT1Tracker:
 
 # ── Daily P&L Circuit Breaker ───────────────────────────────────────────────
 
+
 class TestDailyPnLTracker:
     def test_no_circuit_on_small_loss(self):
         tracker = DailyPnLTracker(max_daily_loss_pct=-0.03)
@@ -64,10 +65,17 @@ class TestDailyPnLTracker:
 
 # ── RiskAgent Portfolio-Level Controls ──────────────────────────────────────
 
+
 class TestRiskAgentPortfolio:
     def _buy_signal(self, price=100.0):
-        return AgentResult("a1", "300750", signal="BUY", confidence=0.9,
-                           success=True, metrics={"current_price": price})
+        return AgentResult(
+            "a1",
+            "300750",
+            signal="BUY",
+            confidence=0.9,
+            success=True,
+            metrics={"current_price": price},
+        )
 
     def test_portfolio_heat_reduces_position(self):
         """Position should be reduced when portfolio is already heavily invested."""
@@ -77,7 +85,8 @@ class TestRiskAgentPortfolio:
         # Already at 45% invested — only 5% headroom
         current_positions = {"600519": 45000.0}
         result = agent.analyze(
-            "300750", results,
+            "300750",
+            results,
             current_positions=current_positions,
             current_equity=100000,
             current_date="2025-01-02",
@@ -93,7 +102,8 @@ class TestRiskAgentPortfolio:
         # Already at 55% invested — exceeds 50% limit
         current_positions = {"600519": 55000.0}
         result = agent.analyze(
-            "300750", results,
+            "300750",
+            results,
             current_positions=current_positions,
             current_equity=100000,
             current_date="2025-01-02",
@@ -113,7 +123,8 @@ class TestRiskAgentPortfolio:
             AgentResult("a2", "300750", signal="SELL", confidence=0.8, success=True),
         ]
         result = agent.analyze(
-            "300750", sell_results,
+            "300750",
+            sell_results,
             current_date="2025-01-01",
         )
         # SELL should be downgraded to HOLD due to T+1
@@ -127,7 +138,8 @@ class TestRiskAgentPortfolio:
 
         results = [self._buy_signal()]
         result = agent.analyze(
-            "300750", results,
+            "300750",
+            results,
             current_equity=96000,  # 4% daily loss
             current_date="2025-01-01",
         )

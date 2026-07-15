@@ -4,20 +4,21 @@ from __future__ import annotations
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Optional
+from datetime import datetime
+from typing import Any
 
 import pandas as pd
 
 from ..config import Settings, get_settings
-from .sources.base import DataSource, FinancialSnapshot
-from .sources.tushare import TushareSource
+from .normalizer import normalize_price_data
 from .sources.akshare import AkshareSource
 from .sources.baostock import BaoStockSource
+from .sources.base import DataProvenance, DataSource, FinancialSnapshot
 from .sources.sample import SamplePriceSource
-from .normalizer import normalize_price_data
-from .validator import validate_price_data, clean_price_data, repair_price_data
-from .validators import validate_stock_code
+from .sources.tushare import TushareSource
 from .store import DataStore
+from .validator import clean_price_data, repair_price_data, validate_price_data
+from .validators import validate_stock_code
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +30,11 @@ class DataService:
     支持：离线模式、数据修复、财务多源合并
     """
 
-    def __init__(self, settings: Optional[Settings] = None):
+    def __init__(self, settings: Settings | None = None):
         self.settings = settings or get_settings()
         self.store = DataStore(self.settings.parquet_dir)
+        # 数据谱系：stock_code -> 本次分析会话获取的数据来源记录（P3）
+        self._lineage: dict[str, list[DataProvenance]] = {}
 
         # 初始化数据源（按优先级顺序）
         self._sources: list[DataSource] = []
@@ -48,6 +51,7 @@ class DataService:
         # efinance（免费稳定，东方财富 API）
         try:
             from .sources.efinance import EfinanceSource
+
             self._efinance = EfinanceSource()
             if self._efinance.available:
                 self._sources.append(self._efinance)
@@ -80,7 +84,7 @@ class DataService:
         logger.info("Sample data source ready (real bundled data only; never synthetic)")
 
     @property
-    def tushare(self) -> Optional[TushareSource]:
+    def tushare(self) -> TushareSource | None:
         return self._tushare if hasattr(self, "_tushare") else None
 
     @property
@@ -88,11 +92,11 @@ class DataService:
         return self._efinance if hasattr(self, "_efinance") else None
 
     @property
-    def akshare(self) -> Optional[AkshareSource]:
+    def akshare(self) -> AkshareSource | None:
         return self._akshare if hasattr(self, "_akshare") else None
 
     @property
-    def baostock(self) -> Optional[BaoStockSource]:
+    def baostock(self) -> BaoStockSource | None:
         return self._baostock if hasattr(self, "_baostock") else None
 
     # ── 行情数据 ──
@@ -101,13 +105,38 @@ class DataService:
         """Get cache TTL from settings (convert seconds → hours)."""
         return getattr(self.settings, "data_cache_ttl", 14400) / 3600
 
+    # ── 数据谱系 (P3) ────────────────────────────────────────────
+
+    def _record_lineage(
+        self,
+        stock_code: str,
+        source: str,
+        data_type: str,
+        confidence: str = "high",
+    ) -> None:
+        """记录一条数据谱系（来源 + 获取时间）。"""
+        if not hasattr(self, "_lineage"):
+            self._lineage = {}
+        prov = DataProvenance(
+            source=source,
+            identifier=stock_code,
+            fetched_at=datetime.now().isoformat(timespec="seconds"),
+            data_type=data_type,
+            confidence=confidence,
+        )
+        self._lineage.setdefault(stock_code, []).append(prov)
+
+    def get_lineage(self, stock_code: str) -> list[DataProvenance]:
+        """返回某股票本次会话获取的数据谱系记录（用于报告透明展示）。"""
+        return list(getattr(self, "_lineage", {}).get(stock_code, []))
+
     def get_price_data(
         self,
         stock_code: str,
         days: int = 250,
         use_cache: bool = True,
         clean: bool = True,
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """获取标准化行情数据
 
         优先级: 缓存/存储 → 各数据源依次尝试（含数据修复）
@@ -119,11 +148,13 @@ class DataService:
             df = self.store.load_price(stock_code)
             if df is not None:
                 logger.info(f"Offline mode: using cached data for {stock_code}")
+                self._record_lineage(stock_code, "cache", "price")
                 return normalize_price_data(df)
             try:
                 demo = self._sample.get_price_data(stock_code, days)
                 if demo is not None and not demo.empty:
                     logger.info(f"Offline mode: using sample fallback for {stock_code}")
+                    self._record_lineage(stock_code, "sample", "price", confidence="low")
                     return normalize_price_data(demo)
             except Exception as e:
                 logger.warning(f"Offline sample fallback failed: {e}")
@@ -132,10 +163,11 @@ class DataService:
 
         # 1. 尝试缓存
         max_age = self._cache_max_age_hours()
-        if use_cache and self.store.is_fresh(stock_code, max_age_hours=max_age):
+        if use_cache and self.store.is_fresh(stock_code, max_age_hours=int(max_age)):
             df = self.store.load_price(stock_code)
             if df is not None and len(df) >= days * 0.8:
                 logger.info(f"Cache hit: {stock_code} ({len(df)} rows)")
+                self._record_lineage(stock_code, "cache", "price")
                 return normalize_price_data(df)
 
         # 2. 依次尝试数据源（含数据修复）
@@ -149,8 +181,7 @@ class DataService:
                 if not report.is_valid:
                     # 尝试修复再校验
                     logger.warning(
-                        f"Validation failed ({source.name}): {report.errors}, "
-                        f"attempting repair"
+                        f"Validation failed ({source.name}): {report.errors}, attempting repair"
                     )
                     repaired = repair_price_data(df)
                     if repaired is not None and not repaired.empty:
@@ -170,6 +201,7 @@ class DataService:
 
                 # 持久化
                 self.store.save_price(stock_code, df, source=source.name)
+                self._record_lineage(stock_code, source.name, "price")
                 return df
 
         # 3. 内置真实样例兜底（仅当无任何可用真实数据源时，如各源初始化均失败）。
@@ -202,7 +234,7 @@ class DataService:
         logger.error(f"All sources failed: {stock_code}")
         return None
 
-    def get_realtime_price(self, stock_code: str) -> Optional[float]:
+    def get_realtime_price(self, stock_code: str) -> float | None:
         """获取实时价格"""
         stock_code = validate_stock_code(stock_code)
         for source in self._sources:
@@ -223,7 +255,7 @@ class DataService:
 
     def get_financial_snapshot(
         self, stock_code: str, max_age_days: int = 365
-    ) -> Optional[FinancialSnapshot]:
+    ) -> FinancialSnapshot | None:
         """获取财务快照 — 多源降级 + 合并。
 
         降级链: Tushare → efinance → AkShare → 本地缓存。
@@ -243,6 +275,16 @@ class DataService:
             try:
                 snap = self._sample.get_financial_snapshot(stock_code)
                 if snap is not None:
+                    snap.add_provenance(
+                        DataProvenance(
+                            source="sample",
+                            identifier=stock_code,
+                            fetched_at=datetime.now().isoformat(timespec="seconds"),
+                            data_type="financial",
+                            confidence="low",
+                        )
+                    )
+                    self._record_lineage(stock_code, "sample", "financial", confidence="low")
                     return snap
             except Exception as e:
                 logger.warning(f"Offline financial fallback failed: {e}")
@@ -265,15 +307,23 @@ class DataService:
         for name, snap in snapshots.items():
             report = snap.validate()
             if not report.missing_required:
-                self.store.save_financial(
-                    stock_code, snap.to_dict(), source=name
+                self.store.save_financial(stock_code, snap.to_dict(), source=name)
+                snap.add_provenance(
+                    DataProvenance(
+                        source=name,
+                        identifier=stock_code,
+                        fetched_at=datetime.now().isoformat(timespec="seconds"),
+                        data_type="financial",
+                        confidence="high",
+                    )
                 )
+                self._record_lineage(stock_code, name, "financial")
                 return snap
 
         # 3. 多源合并（填补空字段）
         if snapshots:
             merged_data: dict[str, Any] = {}
-            for name, snap in snapshots.items():
+            for snap in snapshots.values():
                 for key in FinancialSnapshot.SCHEMA:
                     val = snap.get(key)
                     if val is not None and key not in merged_data:
@@ -281,13 +331,19 @@ class DataService:
 
             if merged_data:
                 merged = FinancialSnapshot(stock_code, merged_data)
-                logger.info(
-                    f"Merged financial data from {list(snapshots.keys())} "
-                    f"for {stock_code}"
-                )
-                self.store.save_financial(
-                    stock_code, merged.to_dict(), source="merged"
-                )
+                for src_name in snapshots:
+                    merged.add_provenance(
+                        DataProvenance(
+                            source=src_name,
+                            identifier=stock_code,
+                            fetched_at=datetime.now().isoformat(timespec="seconds"),
+                            data_type="financial",
+                            confidence="partial",
+                        )
+                    )
+                self._record_lineage(stock_code, "merged", "financial", confidence="partial")
+                logger.info(f"Merged financial data from {list(snapshots.keys())} for {stock_code}")
+                self.store.save_financial(stock_code, merged.to_dict(), source="merged")
                 return merged
 
         # 4. 本地缓存降级（含离线模式的样例兜底，见上方 offline 分支）
@@ -295,7 +351,7 @@ class DataService:
 
     def _load_cached_financial(
         self, stock_code: str, max_age_days: int = 365
-    ) -> Optional[FinancialSnapshot]:
+    ) -> FinancialSnapshot | None:
         """Load financial data from local parquet cache."""
         cached = self.store.load_financial(stock_code, latest=True)
         if cached is not None and not cached.empty:
@@ -320,16 +376,28 @@ class DataService:
                 except (ValueError, TypeError):
                     pass
             logger.info(f"Using cached financial data: {stock_code}")
-            return FinancialSnapshot(stock_code, data)
+            snap = FinancialSnapshot(stock_code, data)
+            snap.add_provenance(
+                DataProvenance(
+                    source="cache",
+                    identifier=stock_code,
+                    fetched_at=datetime.now().isoformat(timespec="seconds"),
+                    data_type="financial",
+                    confidence="high",
+                )
+            )
+            self._record_lineage(stock_code, "cache", "financial")
+            return snap
         return None
 
     def get_financial_statements(
         self, stock_code: str, statement_type: str, periods: int = 4
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """获取原始财务报表"""
         stock_code = validate_stock_code(stock_code)
         if self.tushare and self.tushare.available:
             from .sources.base import StatementType
+
             st = StatementType(statement_type)
             return self.tushare.get_financial_statements(stock_code, st, periods)
         return None
@@ -340,7 +408,7 @@ class DataService:
         self,
         stock_codes: list[str],
         days: int = 250,
-        max_workers: Optional[int] = None,
+        max_workers: int | None = None,
     ) -> dict[str, pd.DataFrame]:
         """批量获取行情（支持并发）
 
@@ -357,17 +425,17 @@ class DataService:
 
         # Sequential fallback when max_workers == 1
         if workers <= 1:
-            results = {}
+            seq_results: dict[str, pd.DataFrame] = {}
             for code in stock_codes:
                 df = self.get_price_data(code, days)
                 if df is not None:
-                    results[code] = df
-            return results
+                    seq_results[code] = df
+            return seq_results
 
         # Concurrent execution
         results: dict[str, pd.DataFrame] = {}
 
-        def _fetch_one(code: str) -> tuple[str, Optional[pd.DataFrame]]:
+        def _fetch_one(code: str) -> tuple[str, pd.DataFrame | None]:
             try:
                 return code, self.get_price_data(code, days)
             except Exception as exc:
@@ -383,9 +451,7 @@ class DataService:
 
         return results
 
-    def get_multi_financial(
-        self, stock_codes: list[str]
-    ) -> dict[str, FinancialSnapshot]:
+    def get_multi_financial(self, stock_codes: list[str]) -> dict[str, FinancialSnapshot]:
         """批量获取财务快照"""
         results = {}
         for code in stock_codes:
@@ -396,7 +462,7 @@ class DataService:
 
     # ── 新闻数据 ──
 
-    def get_news(self, stock_code: str, count: int = 20) -> Optional[pd.DataFrame]:
+    def get_news(self, stock_code: str, count: int = 20) -> pd.DataFrame | None:
         """获取个股新闻
 
         Args:

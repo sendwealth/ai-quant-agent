@@ -1,18 +1,17 @@
 """Tests for PaperTradingService -- persistent portfolio state."""
 
 import json
-import os
 from pathlib import Path
 
 import pytest
 
 from quant_agent.execution.paper_trading import PaperTradingService
-from quant_agent.portfolio import CommissionModel, Portfolio
-
+from quant_agent.portfolio import CommissionModel
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _svc(tmp_path: Path, initial_capital: float = 100_000.0) -> PaperTradingService:
     """Create a PaperTradingService rooted in *tmp_path*."""
@@ -29,6 +28,7 @@ def _state_file(tmp_path: Path) -> Path:
 # ---------------------------------------------------------------------------
 # Fresh start (no state file)
 # ---------------------------------------------------------------------------
+
 
 class TestFreshStart:
     """When no state file exists, a new Portfolio is created."""
@@ -53,6 +53,7 @@ class TestFreshStart:
 # ---------------------------------------------------------------------------
 # State persistence (buy -> reload -> verify)
 # ---------------------------------------------------------------------------
+
 
 class TestStatePersistence:
     """State survives creating a new service instance."""
@@ -119,6 +120,7 @@ class TestStatePersistence:
 # Atomic writes
 # ---------------------------------------------------------------------------
 
+
 class TestAtomicWrites:
     """State file must never be in a partial / corrupt state."""
 
@@ -150,6 +152,7 @@ class TestAtomicWrites:
 # ---------------------------------------------------------------------------
 # Sell and state updates
 # ---------------------------------------------------------------------------
+
 
 class TestSellAndUpdate:
     """Sell operations and price updates modify state correctly."""
@@ -214,6 +217,7 @@ class TestSellAndUpdate:
 # Multiple positions
 # ---------------------------------------------------------------------------
 
+
 class TestMultiplePositions:
     """Service handles multiple concurrent positions."""
 
@@ -265,6 +269,7 @@ class TestMultiplePositions:
 # get_state_summary
 # ---------------------------------------------------------------------------
 
+
 class TestGetStateSummary:
     def test_empty_portfolio(self, tmp_path: Path):
         svc = _svc(tmp_path)
@@ -301,6 +306,7 @@ class TestGetStateSummary:
 # ---------------------------------------------------------------------------
 # Corrupted state file fallback
 # ---------------------------------------------------------------------------
+
 
 class TestCorruptedState:
     """A corrupted state file should not crash the service."""

@@ -1,17 +1,12 @@
 """邮件通知测试 — mock smtplib，验证三种场景"""
 
-import json
 import smtplib
-from unittest.mock import MagicMock, patch, call
-from datetime import datetime
+from unittest.mock import MagicMock, patch
 
-import pytest
-
+from quant_agent.agents.base import AgentResult
 from quant_agent.config import Settings
 from quant_agent.notification.email import EmailNotifier
 from quant_agent.orchestrator import AnalysisReport
-from quant_agent.agents.base import AgentResult
-
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -196,7 +191,13 @@ class TestDailyReport:
             "cash": 50000.0,
             "total_return": 0.10,
             "positions": {
-                "300750": {"shares": 100, "avg_price": 200.0, "current_price": 220.0, "pnl": 2000.0, "pnl_pct": 0.10},
+                "300750": {
+                    "shares": 100,
+                    "avg_price": 200.0,
+                    "current_price": 220.0,
+                    "pnl": 2000.0,
+                    "pnl_pct": 0.10,
+                },
             },
         }
 
@@ -216,7 +217,9 @@ class TestDailyReport:
         mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
 
         notifier = _make_notifier()
-        result = notifier.send_daily_report([], {"total_equity": 100000, "cash": 100000, "total_return": 0.0})
+        result = notifier.send_daily_report(
+            [], {"total_equity": 100000, "cash": 100000, "total_return": 0.0}
+        )
         # Empty reports still sends an email (shows "BUY:0 SELL:0 HOLD:0")
         assert result is True
 

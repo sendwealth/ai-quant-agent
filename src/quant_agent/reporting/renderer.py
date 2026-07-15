@@ -6,10 +6,9 @@
 from __future__ import annotations
 
 import html
-from typing import Optional
 
-from ..orchestrator import AnalysisReport
 from ..agents.base import AgentResult
+from ..orchestrator import AnalysisReport
 
 
 def _signal_badge(signal: str) -> str:
@@ -23,7 +22,7 @@ def _fmt_pct(v) -> str:
         return "N/A"
 
 
-def _agent_block(result: Optional[AgentResult], title: str) -> str:
+def _agent_block(result: AgentResult | None, title: str) -> str:
     if result is None:
         return f"### {title}\n\n- 状态: 未运行\n"
     status = "OK" if result.success else "FAIL"
@@ -135,6 +134,20 @@ def render_markdown(report: AnalysisReport) -> str:
         parts.append(report.llm_analysis)
         parts.append("")
 
+    # 数据谱系 (P3)：透明展示数据来源 / 获取时间 / 可信度
+    if report.data_lineage:
+        parts.append("## 数据来源 (Data Lineage)")
+        parts.append("")
+        parts.append("| 类型 | 来源 | 获取时间 | 可信度 |")
+        parts.append("| --- | --- | --- | --- |")
+        for prov in report.data_lineage:
+            d = prov.to_dict() if hasattr(prov, "to_dict") else prov
+            parts.append(
+                f"| {d.get('data_type', '?')} | {d.get('source', '?')} "
+                f"| {d.get('fetched_at', '?')} | {d.get('confidence', '?')} |"
+            )
+        parts.append("")
+
     return "\n".join(parts)
 
 
@@ -170,4 +183,8 @@ def render_html(report: AnalysisReport) -> str:
         ".report li{margin:.2rem 0;}"
         "</style>"
     )
-    return f"<!DOCTYPE html><html><head><meta charset='utf-8'><title>Quant Report</title>{style}</head><body>" + "\n".join(out) + "</body></html>"
+    return (
+        f"<!DOCTYPE html><html><head><meta charset='utf-8'><title>Quant Report</title>{style}</head><body>"
+        + "\n".join(out)
+        + "</body></html>"
+    )

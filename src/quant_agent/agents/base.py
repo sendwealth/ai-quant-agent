@@ -6,7 +6,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 Signal = Literal["BUY", "SELL", "HOLD"]
 
@@ -16,16 +16,17 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AgentResult:
     """Agent 执行结果"""
+
     agent_name: str
     stock_code: str
-    signal: Signal = "HOLD"          # BUY / HOLD / SELL
-    confidence: float = 0.0       # 0-1
+    signal: Signal = "HOLD"  # BUY / HOLD / SELL
+    confidence: float = 0.0  # 0-1
     reasoning: str = ""
     metrics: dict[str, Any] = field(default_factory=dict)
     scores: dict[str, Any] = field(default_factory=dict)
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -47,7 +48,7 @@ class BaseAgent(ABC):
     def __init__(
         self,
         name: str,
-        data_service: Optional[Any] = None,
+        data_service: Any | None = None,
         **kwargs,  # accept and ignore extra kwargs for forward compat
     ):
         self.name = name

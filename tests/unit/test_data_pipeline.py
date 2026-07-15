@@ -1,10 +1,10 @@
 """数据管道集成测试 -- 降级链路、normalizer 边界、stock code 验证、持久化"""
 
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
-import pandas as pd
-import numpy as np
+from unittest.mock import MagicMock, PropertyMock, patch
 
+import numpy as np
+import pandas as pd
+import pytest
 
 # ── Fixtures ──
 
@@ -15,14 +15,16 @@ def sample_price_df():
     np.random.seed(42)
     dates = pd.date_range("2025-01-01", periods=100, freq="B")
     close = 100 + np.cumsum(np.random.randn(100) * 2)
-    return pd.DataFrame({
-        "date": dates.strftime("%Y%m%d"),
-        "open": close - np.random.rand(100),
-        "high": close + np.random.rand(100) * 2,
-        "low": close - np.random.rand(100) * 2,
-        "close": close,
-        "volume": np.random.randint(100000, 1000000, 100).astype(float),
-    })
+    return pd.DataFrame(
+        {
+            "date": dates.strftime("%Y%m%d"),
+            "open": close - np.random.rand(100),
+            "high": close + np.random.rand(100) * 2,
+            "low": close - np.random.rand(100) * 2,
+            "close": close,
+            "volume": np.random.randint(100000, 1000000, 100).astype(float),
+        }
+    )
 
 
 @pytest.fixture
@@ -64,6 +66,7 @@ def _build_service(mock_settings, sources, use_real_store=False):
 
     if use_real_store:
         from quant_agent.data.store import DataStore
+
         ds.store = DataStore(mock_settings.parquet_dir)
     else:
         ds.store = MagicMock()
@@ -133,14 +136,16 @@ class TestDataServiceFallback:
         """
         # 构建高空值数据: 20 行中有 15 行 close/volume 为 NaN -> 75% nulls
         n = 20
-        bad_df = pd.DataFrame({
-            "date": pd.date_range("2025-01-01", periods=n, freq="B").strftime("%Y%m%d"),
-            "open": [100.0] * n,
-            "high": [105.0] * n,
-            "low": [99.0] * n,
-            "close": [np.nan] * 15 + [100.0] * 5,  # 75% nulls
-            "volume": [np.nan] * 15 + [5000.0] * 5,
-        })
+        bad_df = pd.DataFrame(
+            {
+                "date": pd.date_range("2025-01-01", periods=n, freq="B").strftime("%Y%m%d"),
+                "open": [100.0] * n,
+                "high": [105.0] * n,
+                "low": [99.0] * n,
+                "close": [np.nan] * 15 + [100.0] * 5,  # 75% nulls
+                "volume": [np.nan] * 15 + [5000.0] * 5,
+            }
+        )
 
         src1 = _make_source("source1", price_data=bad_df)
         src2 = _make_source("source2", price_data=sample_price_df)
@@ -235,9 +240,16 @@ class TestDataServiceFallback:
         """All live sources fail, falls back to local cache"""
         ds = _build_service(mock_settings, [])
         recent_date = (pd.Timestamp.now() - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
-        ds.store.load_financial.return_value = pd.DataFrame([{
-            "roe": 0.15, "pe_ttm": 20.0, "pb": 4.0, "report_date": recent_date,
-        }])
+        ds.store.load_financial.return_value = pd.DataFrame(
+            [
+                {
+                    "roe": 0.15,
+                    "pe_ttm": 20.0,
+                    "pb": 4.0,
+                    "report_date": recent_date,
+                }
+            ]
+        )
 
         result = ds.get_financial_snapshot("300750")
 
@@ -262,7 +274,9 @@ class TestDataServiceFallback:
         mock_tushare.available = False
         ds.store.load_financial.return_value = pd.DataFrame()
 
-        with patch.object(type(ds), "tushare", new_callable=PropertyMock, return_value=mock_tushare):
+        with patch.object(
+            type(ds), "tushare", new_callable=PropertyMock, return_value=mock_tushare
+        ):
             result = ds.get_financial_snapshot("300750")
 
         assert result is None
@@ -274,10 +288,14 @@ class TestDataServiceFallback:
         ds = _build_service(mock_settings, [])
 
         old_date = (datetime.now() - timedelta(days=730)).strftime("%Y-%m-%d")
-        ds.store.load_financial.return_value = pd.DataFrame([{
-            "roe": 0.18,
-            "report_date": old_date,
-        }])
+        ds.store.load_financial.return_value = pd.DataFrame(
+            [
+                {
+                    "roe": 0.18,
+                    "report_date": old_date,
+                }
+            ]
+        )
 
         result = ds.get_financial_snapshot("300750", max_age_days=365)
         assert result is None
@@ -327,6 +345,7 @@ class TestNormalizerEdgeCases:
     def test_missing_required_columns_raises(self):
         """缺少必要列应抛出 ValueError"""
         from quant_agent.data.normalizer import normalize_price_data
+
         df = pd.DataFrame({"date": ["2025-01-01"], "close": [100.0]})
         with pytest.raises(ValueError, match="缺少必要列"):
             normalize_price_data(df)
@@ -334,6 +353,7 @@ class TestNormalizerEdgeCases:
     def test_all_columns_present_no_error(self, sample_price_df):
         """完整数据不应抛异常"""
         from quant_agent.data.normalizer import normalize_price_data
+
         result = normalize_price_data(sample_price_df)
         assert "date" in result.columns
         assert "close" in result.columns
@@ -342,17 +362,21 @@ class TestNormalizerEdgeCases:
     def test_empty_dataframe_raises(self):
         """空 DataFrame 缺少必要列"""
         from quant_agent.data.normalizer import normalize_price_data
+
         with pytest.raises(ValueError, match="缺少必要列"):
             normalize_price_data(pd.DataFrame())
 
     def test_partial_columns_raises(self):
         """只有部分列应抛异常"""
         from quant_agent.data.normalizer import normalize_price_data
-        df = pd.DataFrame({
-            "date": ["2025-01-01"],
-            "close": [100.0],
-            "open": [99.0],
-        })
+
+        df = pd.DataFrame(
+            {
+                "date": ["2025-01-01"],
+                "close": [100.0],
+                "open": [99.0],
+            }
+        )
         with pytest.raises(ValueError, match="缺少必要列"):
             normalize_price_data(df)
 
@@ -360,14 +384,16 @@ class TestNormalizerEdgeCases:
         """中文列名映射为英文"""
         from quant_agent.data.normalizer import normalize_price_data
 
-        df = pd.DataFrame({
-            "日期": ["20250101", "20250102", "20250103"],
-            "开盘": [100.0, 101.0, 102.0],
-            "收盘": [101.0, 102.0, 103.0],
-            "最高": [102.0, 103.0, 104.0],
-            "最低": [99.0, 100.0, 101.0],
-            "成交量": [10000.0, 11000.0, 12000.0],
-        })
+        df = pd.DataFrame(
+            {
+                "日期": ["20250101", "20250102", "20250103"],
+                "开盘": [100.0, 101.0, 102.0],
+                "收盘": [101.0, 102.0, 103.0],
+                "最高": [102.0, 103.0, 104.0],
+                "最低": [99.0, 100.0, 101.0],
+                "成交量": [10000.0, 11000.0, 12000.0],
+            }
+        )
         result = normalize_price_data(df)
         assert list(result.columns) == ["date", "open", "close", "high", "low", "volume"]
 
@@ -375,14 +401,16 @@ class TestNormalizerEdgeCases:
         """Tushare 风格列名（trade_date, vol）被正确映射"""
         from quant_agent.data.normalizer import normalize_price_data
 
-        df = pd.DataFrame({
-            "trade_date": ["20250101", "20250102"],
-            "open": [100.0, 101.0],
-            "high": [105.0, 106.0],
-            "low": [99.0, 100.0],
-            "close": [103.0, 104.0],
-            "vol": [5000.0, 6000.0],
-        })
+        df = pd.DataFrame(
+            {
+                "trade_date": ["20250101", "20250102"],
+                "open": [100.0, 101.0],
+                "high": [105.0, 106.0],
+                "low": [99.0, 100.0],
+                "close": [103.0, 104.0],
+                "vol": [5000.0, 6000.0],
+            }
+        )
         result = normalize_price_data(df)
         assert "date" in result.columns
         assert "volume" in result.columns
@@ -392,14 +420,16 @@ class TestNormalizerEdgeCases:
         """单行 DataFrame 应正常通过"""
         from quant_agent.data.normalizer import normalize_price_data
 
-        df = pd.DataFrame({
-            "date": ["20250101"],
-            "open": [100.0],
-            "high": [105.0],
-            "low": [99.0],
-            "close": [103.0],
-            "volume": [5000.0],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["20250101"],
+                "open": [100.0],
+                "high": [105.0],
+                "low": [99.0],
+                "close": [103.0],
+                "volume": [5000.0],
+            }
+        )
         result = normalize_price_data(df)
         assert len(result) == 1
         assert result["close"].iloc[0] == 103.0
@@ -408,14 +438,16 @@ class TestNormalizerEdgeCases:
         """标准化后按日期升序排列"""
         from quant_agent.data.normalizer import normalize_price_data
 
-        df = pd.DataFrame({
-            "date": ["20250103", "20250101", "20250102"],
-            "open": [102.0, 100.0, 101.0],
-            "high": [107.0, 105.0, 106.0],
-            "low": [101.0, 99.0, 100.0],
-            "close": [105.0, 103.0, 104.0],
-            "volume": [7000.0, 5000.0, 6000.0],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["20250103", "20250101", "20250102"],
+                "open": [102.0, 100.0, 101.0],
+                "high": [107.0, 105.0, 106.0],
+                "low": [101.0, 99.0, 100.0],
+                "close": [105.0, 103.0, 104.0],
+                "volume": [7000.0, 5000.0, 6000.0],
+            }
+        )
         result = normalize_price_data(df)
         dates = result["date"].tolist()
         assert dates == sorted(dates)
@@ -424,14 +456,16 @@ class TestNormalizerEdgeCases:
         """NaN 值在数值列中被保留（不丢弃）"""
         from quant_agent.data.normalizer import normalize_price_data
 
-        df = pd.DataFrame({
-            "date": ["20250101", "20250102"],
-            "open": [100.0, np.nan],
-            "high": [105.0, 106.0],
-            "low": [99.0, 100.0],
-            "close": [103.0, 104.0],
-            "volume": [5000.0, 6000.0],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["20250101", "20250102"],
+                "open": [100.0, np.nan],
+                "high": [105.0, 106.0],
+                "low": [99.0, 100.0],
+                "close": [103.0, 104.0],
+                "volume": [5000.0, 6000.0],
+            }
+        )
         result = normalize_price_data(df)
         assert result["open"].isna().sum() == 1
 
@@ -439,13 +473,15 @@ class TestNormalizerEdgeCases:
         """缺少 open 列（其余都有）仍应报错"""
         from quant_agent.data.normalizer import normalize_price_data
 
-        df = pd.DataFrame({
-            "date": ["20250101"],
-            "high": [105.0],
-            "low": [99.0],
-            "close": [103.0],
-            "volume": [5000.0],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["20250101"],
+                "high": [105.0],
+                "low": [99.0],
+                "close": [103.0],
+                "volume": [5000.0],
+            }
+        )
         with pytest.raises(ValueError, match="缺少必要列"):
             normalize_price_data(df)
 
@@ -460,63 +496,76 @@ class TestStockCodeValidation:
 
     def test_valid_shanghai(self):
         from quant_agent.data.validators import validate_stock_code
+
         assert validate_stock_code("601318") == "601318"
 
     def test_valid_shenzhen_main(self):
         from quant_agent.data.validators import validate_stock_code
+
         assert validate_stock_code("000001") == "000001"
 
     def test_valid_chinext(self):
         from quant_agent.data.validators import validate_stock_code
+
         assert validate_stock_code("300750") == "300750"
 
     def test_valid_beijing(self):
         from quant_agent.data.validators import validate_stock_code
+
         assert validate_stock_code("830799") == "830799"
 
     def test_whitespace_stripped(self):
         from quant_agent.data.validators import validate_stock_code
+
         assert validate_stock_code("  300750  ") == "300750"
 
     def test_invalid_prefix(self):
         from quant_agent.data.validators import validate_stock_code
+
         with pytest.raises(ValueError, match="prefix"):
             validate_stock_code("123456")
 
     def test_invalid_prefix_40(self):
         """前缀 '40' 不是有效 A 股前缀"""
         from quant_agent.data.validators import validate_stock_code
+
         with pytest.raises(ValueError, match="prefix"):
             validate_stock_code("400001")
 
     def test_too_short(self):
         from quant_agent.data.validators import validate_stock_code
+
         with pytest.raises(ValueError, match="6 digits"):
             validate_stock_code("30075")
 
     def test_too_long(self):
         from quant_agent.data.validators import validate_stock_code
+
         with pytest.raises(ValueError, match="6 digits"):
             validate_stock_code("3007501")
 
     def test_non_numeric(self):
         from quant_agent.data.validators import validate_stock_code
+
         with pytest.raises(ValueError, match="digits"):
             validate_stock_code("30075A")
 
     def test_none_raises(self):
         from quant_agent.data.validators import validate_stock_code
+
         with pytest.raises(ValueError, match="None"):
             validate_stock_code(None)
 
     def test_empty_string_raises(self):
         from quant_agent.data.validators import validate_stock_code
+
         with pytest.raises(ValueError):
             validate_stock_code("")
 
     def test_integer_input_converted(self):
         """整数输入会被转为字符串并验证"""
         from quant_agent.data.validators import validate_stock_code
+
         assert validate_stock_code(300750) == "300750"
 
 
@@ -533,14 +582,16 @@ class TestDataStoreIntegration:
         from quant_agent.data.store import DataStore
 
         store = DataStore(base_dir=str(tmp_path / "parquet"))
-        df = pd.DataFrame({
-            "date": ["2025-01-01", "2025-01-02"],
-            "open": [100.0, 101.0],
-            "high": [105.0, 106.0],
-            "low": [99.0, 100.0],
-            "close": [103.0, 104.0],
-            "volume": [5000.0, 6000.0],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2025-01-01", "2025-01-02"],
+                "open": [100.0, 101.0],
+                "high": [105.0, 106.0],
+                "low": [99.0, 100.0],
+                "close": [103.0, 104.0],
+                "volume": [5000.0, 6000.0],
+            }
+        )
         store.save_price("300750", df, source="test")
         loaded = store.load_price("300750")
 
@@ -601,14 +652,16 @@ class TestDataStoreIntegration:
         from quant_agent.data.store import DataStore
 
         store = DataStore(base_dir=str(tmp_path / "parquet"))
-        df = pd.DataFrame({
-            "date": ["2025-01-01"],
-            "open": [100.0],
-            "high": [105.0],
-            "low": [99.0],
-            "close": [103.0],
-            "volume": [5000.0],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2025-01-01"],
+                "open": [100.0],
+                "high": [105.0],
+                "low": [99.0],
+                "close": [103.0],
+                "volume": [5000.0],
+            }
+        )
         store.save_price("300750", df, source="test")
         assert store.is_fresh("300750") is True
 
@@ -617,14 +670,16 @@ class TestDataStoreIntegration:
         from quant_agent.data.store import DataStore
 
         store = DataStore(base_dir=str(tmp_path / "parquet"))
-        df = pd.DataFrame({
-            "date": ["2025-01-01"],
-            "open": [100.0],
-            "high": [105.0],
-            "low": [99.0],
-            "close": [103.0],
-            "volume": [5000.0],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2025-01-01"],
+                "open": [100.0],
+                "high": [105.0],
+                "low": [99.0],
+                "close": [103.0],
+                "volume": [5000.0],
+            }
+        )
         store.save_price("300750", df, source="test")
         store.save_price("601318", df, source="test")
 
@@ -681,9 +736,14 @@ class TestDataServiceWithRealStore:
         """Financial snapshot is persisted to real store"""
         from quant_agent.data.sources.base import FinancialSnapshot
 
-        snapshot = FinancialSnapshot("300750", {
-            "roe": 0.18, "pe_ttm": 25.0, "report_date": "2025-06-30",
-        })
+        snapshot = FinancialSnapshot(
+            "300750",
+            {
+                "roe": 0.18,
+                "pe_ttm": 25.0,
+                "report_date": "2025-06-30",
+            },
+        )
         src = _make_source("source1", financial_snapshot=snapshot)
         ds = _build_service(mock_settings, [src], use_real_store=True)
 
@@ -719,14 +779,16 @@ class TestValidationEdgeCases:
         """
         from quant_agent.data.validator import validate_price_data
 
-        df = pd.DataFrame({
-            "date": ["2025-01-01"],
-            "open": [100.0],
-            "high": [105.0],
-            "low": [99.0],
-            "close": [-5.0],
-            "volume": [5000.0],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2025-01-01"],
+                "open": [100.0],
+                "high": [105.0],
+                "low": [99.0],
+                "close": [-5.0],
+                "volume": [5000.0],
+            }
+        )
         report = validate_price_data(df)
         assert "存在非正收盘价" in report.errors
 
@@ -735,14 +797,16 @@ class TestValidationEdgeCases:
         from quant_agent.data.validator import validate_price_data
 
         n = 100
-        df = pd.DataFrame({
-            "date": range(n),
-            "open": [100.0] * n,
-            "high": [105.0] * n,
-            "low": [99.0] * n,
-            "close": [np.nan] * 10 + [100.0] * 90,  # 10% nulls
-            "volume": [5000.0] * n,
-        })
+        df = pd.DataFrame(
+            {
+                "date": range(n),
+                "open": [100.0] * n,
+                "high": [105.0] * n,
+                "low": [99.0] * n,
+                "close": [np.nan] * 10 + [100.0] * 90,  # 10% nulls
+                "volume": [5000.0] * n,
+            }
+        )
         report = validate_price_data(df)
         assert not report.is_valid
 
@@ -750,11 +814,13 @@ class TestValidationEdgeCases:
         """清洗操作移除停牌日（成交量=0）"""
         from quant_agent.data.validator import clean_price_data
 
-        df = pd.DataFrame({
-            "date": ["2025-01-01", "2025-01-02", "2025-01-03"],
-            "close": [100.0, 100.0, 101.0],
-            "volume": [1000.0, 0.0, 1000.0],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2025-01-01", "2025-01-02", "2025-01-03"],
+                "close": [100.0, 100.0, 101.0],
+                "volume": [1000.0, 0.0, 1000.0],
+            }
+        )
         cleaned = clean_price_data(df, remove_stale=True)
         assert len(cleaned) == 2
         assert 0.0 not in cleaned["volume"].values
@@ -763,14 +829,16 @@ class TestValidationEdgeCases:
         """校验报告 summary 包含关键信息"""
         from quant_agent.data.validator import validate_price_data
 
-        df = pd.DataFrame({
-            "date": ["2025-01-01", "2025-01-02"],
-            "open": [100.0, 101.0],
-            "high": [105.0, 106.0],
-            "low": [99.0, 100.0],
-            "close": [103.0, 104.0],
-            "volume": [5000.0, 6000.0],
-        })
+        df = pd.DataFrame(
+            {
+                "date": ["2025-01-01", "2025-01-02"],
+                "open": [100.0, 101.0],
+                "high": [105.0, 106.0],
+                "low": [99.0, 100.0],
+                "close": [103.0, 104.0],
+                "volume": [5000.0, 6000.0],
+            }
+        )
         report = validate_price_data(df)
         summary = report.summary()
         assert "PASS" in summary
@@ -837,10 +905,15 @@ class TestFinancialSnapshotEdgeCases:
         from quant_agent.data.sources.base import FinancialSnapshot
 
         data = {
-            "roe": 0.18, "gross_margin": 0.35, "net_margin": 0.12,
-            "debt_ratio": 0.45, "current_ratio": 1.8,
-            "pe_ttm": 25.0, "pb": 5.6,
-            "revenue_growth": 0.25, "profit_growth": 0.30,
+            "roe": 0.18,
+            "gross_margin": 0.35,
+            "net_margin": 0.12,
+            "debt_ratio": 0.45,
+            "current_ratio": 1.8,
+            "pe_ttm": 25.0,
+            "pb": 5.6,
+            "revenue_growth": 0.25,
+            "profit_growth": 0.30,
         }
         snap = FinancialSnapshot("300750", data)
         assert snap.roe == 0.18
@@ -863,13 +936,15 @@ class TestBaoStockSource:
     """BaoStock 适配器 ABC 合规测试"""
 
     def test_is_datasource(self):
-        from quant_agent.data.sources.base import DataSource
         from quant_agent.data.sources.baostock import BaoStockSource
+        from quant_agent.data.sources.base import DataSource
+
         src = BaoStockSource()
         assert isinstance(src, DataSource)
 
     def test_has_required_methods(self):
         from quant_agent.data.sources.baostock import BaoStockSource
+
         src = BaoStockSource()
         assert hasattr(src, "get_price_data")
         assert hasattr(src, "get_realtime_price")
@@ -877,10 +952,12 @@ class TestBaoStockSource:
 
     def test_name(self):
         from quant_agent.data.sources.baostock import BaoStockSource
+
         src = BaoStockSource()
         assert src.name == "baostock"
 
     def test_realtime_returns_none(self):
         from quant_agent.data.sources.baostock import BaoStockSource
+
         src = BaoStockSource()
         assert src.get_realtime_price("300750") is None

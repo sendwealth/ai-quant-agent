@@ -1,13 +1,25 @@
 """技术指标单元测试"""
 
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
 
 from quant_agent.strategy.indicators import (
-    sma, ema, rsi, macd, bollinger_bands, atr,
-    stochastic, adx, obv, momentum, rate_of_change,
-    cci, williams_r, detect_crossover, normalize,
+    adx,
+    atr,
+    bollinger_bands,
+    cci,
+    detect_crossover,
+    ema,
+    macd,
+    momentum,
+    normalize,
+    obv,
+    rate_of_change,
+    rsi,
+    sma,
+    stochastic,
+    williams_r,
 )
 
 
@@ -22,12 +34,14 @@ def sample_ohlcv():
     np.random.seed(42)
     n = 200
     close = pd.Series(100 + np.cumsum(np.random.randn(n) * 2))
-    return pd.DataFrame({
-        "close": close,
-        "high": close + np.random.rand(n) * 3,
-        "low": close - np.random.rand(n) * 3,
-        "volume": np.random.randint(100000, 1000000, n),
-    })
+    return pd.DataFrame(
+        {
+            "close": close,
+            "high": close + np.random.rand(n) * 3,
+            "low": close - np.random.rand(n) * 3,
+            "volume": np.random.randint(100000, 1000000, n),
+        }
+    )
 
 
 class TestTrendIndicators:

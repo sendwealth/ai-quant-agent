@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from ..audit import AuditLogger
-from ..portfolio import CommissionModel, Portfolio, Position
 from ..execution.paper_trading import PaperTradingService
-from .base import BaseAgent, AgentResult
+from ..portfolio import CommissionModel, Portfolio, Position
+from .base import AgentResult, BaseAgent
 
 if TYPE_CHECKING:
     from ..config import Settings
@@ -21,18 +21,19 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Order:
     """订单"""
+
     stock_code: str
-    direction: str           # "buy" / "sell"
+    direction: str  # "buy" / "sell"
     price: float
     shares: int
     order_type: str = "market"  # "market" / "limit"
-    status: str = "pending"     # "pending" / "filled" / "cancelled" / "rejected"
+    status: str = "pending"  # "pending" / "filled" / "cancelled" / "rejected"
     filled_price: float = 0.0
     filled_shares: int = 0
     commission: float = 0.0
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    filled_at: Optional[str] = None
-    error: Optional[str] = None
+    filled_at: str | None = None
+    error: str | None = None
 
 
 class ExecutionAgent(BaseAgent):
@@ -48,18 +49,22 @@ class ExecutionAgent(BaseAgent):
         commission_rate: float | None = None,
         stamp_tax_rate: float | None = None,
         min_commission: float = 5.0,
-        settings: Optional["Settings"] = None,
-        audit_logger: Optional[AuditLogger] = None,
-        persist_dir: Optional[str] = None,
+        settings: Settings | None = None,
+        audit_logger: AuditLogger | None = None,
+        persist_dir: str | None = None,
         **kwargs,
     ):
         super().__init__(name="execution", **kwargs)
 
-        cr = commission_rate if commission_rate is not None else (
-            settings.commission_rate if settings else 0.0003
+        cr = (
+            commission_rate
+            if commission_rate is not None
+            else (settings.commission_rate if settings else 0.0003)
         )
-        sr = stamp_tax_rate if stamp_tax_rate is not None else (
-            settings.stamp_tax_rate if settings else 0.001
+        sr = (
+            stamp_tax_rate
+            if stamp_tax_rate is not None
+            else (settings.stamp_tax_rate if settings else 0.001)
         )
 
         self.initial_capital = initial_capital
@@ -69,7 +74,7 @@ class ExecutionAgent(BaseAgent):
 
         # 持久化：若提供 persist_dir，则组合状态由 PaperTradingService 托管，
         # 每次成交后写入磁盘，进程重启不丢状态。默认 None（纯内存，测试无副作用）。
-        self._paper: Optional[PaperTradingService] = None
+        self._paper: PaperTradingService | None = None
         if persist_dir is not None:
             self._paper = PaperTradingService(
                 data_dir=persist_dir,
@@ -142,10 +147,16 @@ class ExecutionAgent(BaseAgent):
 
     # -- execution interface -------------------------------------------------
 
-    def execute_signal(self, stock_code: str, signal: str, position_pct: float = 0.0,
-                       current_price: float = 0.0, stop_loss_pct: float | None = None,
-                       take_profit_pct: float | None = None,
-                       agent_results: list[AgentResult] | None = None) -> Optional[Order]:
+    def execute_signal(
+        self,
+        stock_code: str,
+        signal: str,
+        position_pct: float = 0.0,
+        current_price: float = 0.0,
+        stop_loss_pct: float | None = None,
+        take_profit_pct: float | None = None,
+        agent_results: list[AgentResult] | None = None,
+    ) -> Order | None:
         """执行交易信号"""
         if stop_loss_pct is None:
             stop_loss_pct = self._default_stop_loss
@@ -167,10 +178,12 @@ class ExecutionAgent(BaseAgent):
             "position_pct": position_pct,
         }
 
-        order: Optional[Order] = None
+        order: Order | None = None
 
         if signal == "BUY" and position_pct > 0:
-            order = self._buy(stock_code, current_price, position_pct, stop_loss_pct, take_profit_pct)
+            order = self._buy(
+                stock_code, current_price, position_pct, stop_loss_pct, take_profit_pct
+            )
         elif signal == "SELL":
             order = self._sell(stock_code, current_price)
         else:
@@ -200,12 +213,14 @@ class ExecutionAgent(BaseAgent):
         votes: list[dict[str, Any]] = []
         if agent_results:
             for r in agent_results:
-                votes.append({
-                    "agent_name": r.agent_name,
-                    "signal": r.signal,
-                    "confidence": r.confidence,
-                    "reasoning": r.reasoning,
-                })
+                votes.append(
+                    {
+                        "agent_name": r.agent_name,
+                        "signal": r.signal,
+                        "confidence": r.confidence,
+                        "reasoning": r.reasoning,
+                    }
+                )
 
         self.audit_logger.log_trade_decision(
             stock_code=stock_code,
@@ -214,7 +229,7 @@ class ExecutionAgent(BaseAgent):
             final_decision=final_decision,
         )
 
-    def check_stop_conditions(self, stock_code: str, current_price: float) -> Optional[Order]:
+    def check_stop_conditions(self, stock_code: str, current_price: float) -> Order | None:
         """检查止损止盈"""
         pos = self._portfolio.get_position(stock_code)
         if pos is None:
@@ -236,21 +251,26 @@ class ExecutionAgent(BaseAgent):
 
     def record_equity(self, timestamp: str = ""):
         """记录权益快照"""
-        self.equity_history.append({
-            "timestamp": timestamp or datetime.now().isoformat(),
-            "cash": self.cash,
-            "position_value": self.position_value,
-            "total_equity": self.total_equity,
-        })
+        self.equity_history.append(
+            {
+                "timestamp": timestamp or datetime.now().isoformat(),
+                "cash": self.cash,
+                "position_value": self.position_value,
+                "total_equity": self.total_equity,
+            }
+        )
 
     def get_summary(self) -> dict:
         """组合摘要"""
         positions_detail = {}
         for code, pos in self.positions.items():
             positions_detail[code] = {
-                "shares": pos.shares, "avg_price": pos.avg_price,
-                "current_price": pos.current_price, "pnl": pos.pnl,
-                "pnl_pct": pos.pnl_pct, "stop_loss": pos.stop_loss,
+                "shares": pos.shares,
+                "avg_price": pos.avg_price,
+                "current_price": pos.current_price,
+                "pnl": pos.pnl,
+                "pnl_pct": pos.pnl_pct,
+                "stop_loss": pos.stop_loss,
                 "take_profit": pos.take_profit,
             }
 
@@ -271,8 +291,14 @@ class ExecutionAgent(BaseAgent):
 
     # -- internal helpers ----------------------------------------------------
 
-    def _buy(self, stock_code: str, price: float, position_pct: float,
-             stop_loss_pct: float, take_profit_pct: float) -> Order:
+    def _buy(
+        self,
+        stock_code: str,
+        price: float,
+        position_pct: float,
+        stop_loss_pct: float,
+        take_profit_pct: float,
+    ) -> Order:
         amount = self.total_equity * position_pct
         shares = int(amount / price)
         shares = (shares // 100) * 100  # A-share board lot rounding
@@ -282,39 +308,66 @@ class ExecutionAgent(BaseAgent):
             shares = int(self.cash / price)
             shares = (shares // 100) * 100
         if shares <= 0:
-            order = Order(stock_code=stock_code, direction="buy", price=price, shares=0,
-                         status="rejected", error="资金不足或股数<100")
+            order = Order(
+                stock_code=stock_code,
+                direction="buy",
+                price=price,
+                shares=0,
+                status="rejected",
+                error="资金不足或股数<100",
+            )
             self.orders.append(order)
             return order
 
         # Delegate to Portfolio.buy() which handles commission via CommissionModel
         # and auto-reduces shares if cash is insufficient.
         trade = self._portfolio.buy(
-            stock_code, price, shares,
+            stock_code,
+            price,
+            shares,
             stop_loss=price * (1 + stop_loss_pct),
             take_profit=price * (1 + take_profit_pct),
         )
 
         actual_shares = trade.shares
         if actual_shares <= 0:
-            order = Order(stock_code=stock_code, direction="buy", price=price, shares=0,
-                         status="rejected", error="资金不足")
+            order = Order(
+                stock_code=stock_code,
+                direction="buy",
+                price=price,
+                shares=0,
+                status="rejected",
+                error="资金不足",
+            )
             self.orders.append(order)
             return order
 
         commission = trade.commission
 
-        order = Order(stock_code=stock_code, direction="buy", price=price,
-                     shares=actual_shares, status="filled", filled_price=price,
-                     filled_shares=actual_shares, commission=commission)
+        order = Order(
+            stock_code=stock_code,
+            direction="buy",
+            price=price,
+            shares=actual_shares,
+            status="filled",
+            filled_price=price,
+            filled_shares=actual_shares,
+            commission=commission,
+        )
         self.orders.append(order)
         self._log_trade(order)
-        self._log_action("order_filled", stock_code=stock_code, signal="BUY",
-                         direction="buy", shares=actual_shares, price=price)
+        self._log_action(
+            "order_filled",
+            stock_code=stock_code,
+            signal="BUY",
+            direction="buy",
+            shares=actual_shares,
+            price=price,
+        )
         self._persist()
         return order
 
-    def _sell(self, stock_code: str, price: float, reason: str = "SIGNAL") -> Optional[Order]:
+    def _sell(self, stock_code: str, price: float, reason: str = "SIGNAL") -> Order | None:
         pos = self._portfolio.get_position(stock_code)
         if pos is None:
             return None
@@ -324,28 +377,44 @@ class ExecutionAgent(BaseAgent):
 
         self._portfolio.sell(stock_code, price, shares, commission=commission)
 
-        order = Order(stock_code=stock_code, direction="sell", price=price,
-                     shares=shares, status="filled", filled_price=price,
-                     filled_shares=shares, commission=commission)
+        order = Order(
+            stock_code=stock_code,
+            direction="sell",
+            price=price,
+            shares=shares,
+            status="filled",
+            filled_price=price,
+            filled_shares=shares,
+            commission=commission,
+        )
         self.orders.append(order)
         self._log_trade(order, reason=reason)
-        self._log_action("order_filled", stock_code=stock_code, signal="SELL",
-                         direction="sell", shares=shares, price=price,
-                         reason=reason, pnl=pos.pnl)
+        self._log_action(
+            "order_filled",
+            stock_code=stock_code,
+            signal="SELL",
+            direction="sell",
+            shares=shares,
+            price=price,
+            reason=reason,
+            pnl=pos.pnl,
+        )
         self._persist()
         return order
 
     def _log_trade(self, order: Order, reason: str = ""):
-        self.trade_log.append({
-            "timestamp": datetime.now().isoformat(),
-            "stock_code": order.stock_code,
-            "direction": order.direction,
-            "price": order.filled_price or order.price,
-            "shares": order.filled_shares or order.shares,
-            "commission": order.commission,
-            "status": order.status,
-            "reason": reason,
-        })
+        self.trade_log.append(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "stock_code": order.stock_code,
+                "direction": order.direction,
+                "price": order.filled_price or order.price,
+                "shares": order.filled_shares or order.shares,
+                "commission": order.commission,
+                "status": order.status,
+                "reason": reason,
+            }
+        )
 
     def _persist(self) -> None:
         """成交后持久化组合状态（仅当启用 ``persist_dir`` 时）。

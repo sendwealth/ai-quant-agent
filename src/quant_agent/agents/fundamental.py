@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from ..data.sources.base import FinancialSnapshot
 from ..thresholds import _Thresh, get_thresholds
-from .base import BaseAgent, AgentResult
+from .base import AgentResult, BaseAgent
 
 
 class FundamentalAgent(BaseAgent):
@@ -24,10 +24,13 @@ class FundamentalAgent(BaseAgent):
             snapshot = self._get_financial_data(stock_code)
             if snapshot is None:
                 return AgentResult(
-                    agent_name=self.name, stock_code=stock_code,
-                    signal="HOLD", confidence=0.0,
+                    agent_name=self.name,
+                    stock_code=stock_code,
+                    signal="HOLD",
+                    confidence=0.0,
                     reasoning="无法获取财务数据",
-                    success=False, error="NO_DATA",
+                    success=False,
+                    error="NO_DATA",
                 )
 
             scores = self._calc_scores(snapshot)
@@ -54,20 +57,25 @@ class FundamentalAgent(BaseAgent):
                 },
                 scores=scores,
             )
-            self._log_action("analysis_completed", stock_code=stock_code, signal=signal, confidence=confidence)
+            self._log_action(
+                "analysis_completed", stock_code=stock_code, signal=signal, confidence=confidence
+            )
             return result
 
         except Exception as e:
             self._logger.error("基本面分析失败: %s", e)
             self._log_action("analysis_failed", stock_code=stock_code, error=str(e))
             return AgentResult(
-                agent_name=self.name, stock_code=stock_code,
-                signal="HOLD", confidence=0.0,
+                agent_name=self.name,
+                stock_code=stock_code,
+                signal="HOLD",
+                confidence=0.0,
                 reasoning=f"分析失败: {e}",
-                success=False, error=str(e),
+                success=False,
+                error=str(e),
             )
 
-    def _get_financial_data(self, stock_code: str) -> Optional[FinancialSnapshot]:
+    def _get_financial_data(self, stock_code: str) -> FinancialSnapshot | None:
         """获取财务数据"""
         if self.data_service is None:
             self._logger.warning("未配置 DataService")
@@ -206,9 +214,17 @@ class FundamentalAgent(BaseAgent):
         poor_sell_conf = float(t.get("poor_sell_confidence", 0.65))
 
         if total_score >= excellent_score and scores["valuation"] >= excellent_min_val:
-            return "BUY", min(exc_cap, exc_base + total_score / exc_div), f"基本面优秀(均分{total_score:.1f})，估值合理"
+            return (
+                "BUY",
+                min(exc_cap, exc_base + total_score / exc_div),
+                f"基本面优秀(均分{total_score:.1f})，估值合理",
+            )
         elif total_score >= good_score:
-            return "BUY", min(good_cap, good_base + total_score / good_div), f"基本面良好(均分{total_score:.1f})"
+            return (
+                "BUY",
+                min(good_cap, good_base + total_score / good_div),
+                f"基本面良好(均分{total_score:.1f})",
+            )
         elif total_score >= fair_score:
             return "HOLD", fair_conf, f"基本面一般(均分{total_score:.1f})"
         elif total_score >= weak_score:

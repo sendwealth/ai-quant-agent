@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from ..data.validators import validate_stock_code
 from ..llm.client import LLMClient, LLMError
 from ..llm.prompts import PLANNER_SYSTEM, PLANNER_USER
-from .base import BaseAgent, AgentResult
+from .base import AgentResult, BaseAgent
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ class PlannerAgent(BaseAgent):
                 signal="HOLD",
                 confidence=1.0,
                 reasoning=f"Execution plan: {plan.analysis_type} analysis, "
-                          f"{plan.days} days, focus={plan.focus_areas}",
+                f"{plan.days} days, focus={plan.focus_areas}",
                 metrics=plan.model_dump(),
                 success=True,
             )

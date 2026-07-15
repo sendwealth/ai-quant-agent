@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Optional
+from typing import Literal
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -12,14 +12,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """统一配置，支持环境变量覆盖（前缀 QUANT_）"""
 
-    model_config = SettingsConfigDict(env_prefix="QUANT_", env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="QUANT_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
 
     # ── 应用 ──
     app_name: str = "ai-quant-agent"
     debug: bool = False
 
     # ── 数据源 ──
-    tushare_token: Optional[str] = Field(
+    tushare_token: str | None = Field(
         default=None,
         validation_alias=AliasChoices("QUANT_TUSHARE_TOKEN", "TUSHARE_TOKEN"),
     )
@@ -33,14 +35,14 @@ class Settings(BaseSettings):
     sample_data_dir: str = "data/samples"
 
     # ── LLM ──
-    openai_api_key: Optional[str] = None
+    openai_api_key: str | None = None
     openai_model: str = "gpt-4o"
     openai_base_url: str = "https://api.openai.com/v1"
-    zhipu_api_key: Optional[str] = None
+    zhipu_api_key: str | None = None
     zhipu_model: str = "glm-4"
     # 本地 / 自建 OpenAI 兼容服务（Ollama / LM Studio / vLLM 等）
-    llm_base_url: Optional[str] = None
-    llm_local_model: Optional[str] = None
+    llm_base_url: str | None = None
+    llm_local_model: str | None = None
     llm_timeout: int = 30
     llm_max_retries: int = 2
 
@@ -69,6 +71,13 @@ class Settings(BaseSettings):
     # ── 离线 & 预下载 ──
     offline_mode: bool = False
     preload_stocks: str = "300750,002475,601318,600276,000858,600519"
+
+    # ── 运行模式 (P4) ──
+    # research : 默认，研究/分析，不产生任何交易副作用
+    # backtest : 历史回测，纯离线计算
+    # paper    : 模拟交易（持久化由 persist_trading 控制）
+    # live     : 实盘交易 —— 本开源版本**未实现**，设置后将启动失败（fail-safe）
+    run_mode: Literal["research", "backtest", "paper", "live"] = "research"
 
     # ── 日志 ──
     log_level: str = "INFO"
@@ -130,6 +139,19 @@ class Settings(BaseSettings):
     def _validate_initial_capital(cls, v: float) -> float:
         if v <= 0:
             raise ValueError(f"initial_capital must be positive, got {v}")
+        return v
+
+    @field_validator("run_mode")
+    @classmethod
+    def _validate_run_mode(cls, v: str) -> str:
+        # Fail-safe: 本开源版本不含任何券商实盘适配器，禁止误启用 live 模式，
+        # 避免用户把研究/模拟工具当成实盘交易系统使用。
+        if v == "live":
+            raise ValueError(
+                "run_mode='live' 在本开源版本中未实现：本系统仅支持 "
+                "research / backtest / paper（模拟交易）。如需实盘，请接入"
+                "经过独立安全审查的券商适配器，并在显式、可控的环境下运行。"
+            )
         return v
 
 

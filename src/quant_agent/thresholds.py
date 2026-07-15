@@ -7,7 +7,6 @@ backward compatibility out of the box.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -213,7 +212,7 @@ _FUNDAMENTAL_DEFAULTS: dict[str, Any] = {
 
 _SCREENER_DEFAULTS: dict[str, Any] = {
     "prefilter": {
-        "min_avg_amount": 5000,        # 20日均成交额下限(千元)
+        "min_avg_amount": 5000,  # 20日均成交额下限(千元)
         "min_price": 5.0,
         "max_price": 300.0,
         "exclude_st": True,
@@ -277,6 +276,7 @@ _FULL_DEFAULTS: dict[str, Any] = {
 # Deep merge helper
 # ---------------------------------------------------------------------------
 
+
 def _deep_merge(base: dict, override: dict) -> dict:
     """Merge *override* into *base*, returning a new dict."""
     result = dict(base)
@@ -292,6 +292,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def load_thresholds(path: Path | str | None = None) -> _Thresh:
     """Load thresholds from YAML, falling back to defaults on any failure.
 
@@ -303,13 +304,15 @@ def load_thresholds(path: Path | str | None = None) -> _Thresh:
         try:
             import yaml
 
-            with open(target, "r", encoding="utf-8") as fh:
+            with open(target, encoding="utf-8") as fh:
                 data = yaml.safe_load(fh) or {}
             merged = _deep_merge(_FULL_DEFAULTS, data)
             logger.debug("Loaded agent thresholds from %s", target)
             return _Thresh(merged)
         except Exception:
-            logger.warning("Failed to load thresholds from %s — using defaults", target, exc_info=True)
+            logger.warning(
+                "Failed to load thresholds from %s — using defaults", target, exc_info=True
+            )
 
     return _Thresh(_FULL_DEFAULTS)
 

@@ -31,6 +31,7 @@ _MIN_BARS_LIQUIDITY = 20
 # Tier scoring helper
 # ---------------------------------------------------------------------------
 
+
 def _tier_score(value: float, tiers: list[list]) -> float:
     """Score *value* against a list of [threshold, points] tiers.
 
@@ -48,6 +49,7 @@ def _tier_score(value: float, tiers: list[list]) -> float:
 # ---------------------------------------------------------------------------
 # Technical scorer (~40 pts max)
 # ---------------------------------------------------------------------------
+
 
 def score_technical(
     df: pd.DataFrame,
@@ -121,7 +123,8 @@ def score_technical(
             result["breakdown"]["adx_trend"] = float(thresh.get("adx_strong_score", 5))
 
     result["technical"] = sum(
-        v for k, v in result["breakdown"].items()
+        v
+        for k, v in result["breakdown"].items()
         if isinstance(v, (int, float)) and not k.endswith("_value")
     )
     return result
@@ -130,6 +133,7 @@ def score_technical(
 # ---------------------------------------------------------------------------
 # Momentum scorer (~35 pts max)
 # ---------------------------------------------------------------------------
+
 
 def score_momentum(
     df: pd.DataFrame,
@@ -175,7 +179,8 @@ def score_momentum(
         result["breakdown"]["volatility_value"] = round(vol, 4)
 
     result["momentum"] = sum(
-        v for k, v in result["breakdown"].items()
+        v
+        for k, v in result["breakdown"].items()
         if isinstance(v, (int, float)) and not k.endswith("_value")
     )
     return result
@@ -184,6 +189,7 @@ def score_momentum(
 # ---------------------------------------------------------------------------
 # Liquidity scorer (~25 pts max)
 # ---------------------------------------------------------------------------
+
 
 def score_liquidity(
     df: pd.DataFrame,
@@ -238,7 +244,8 @@ def score_liquidity(
                 result["breakdown"]["volume_ratio_value"] = round(vr, 3)
 
     result["liquidity"] = sum(
-        v for k, v in result["breakdown"].items()
+        v
+        for k, v in result["breakdown"].items()
         if isinstance(v, (int, float)) and not k.endswith("_value")
     )
     return result
@@ -247,6 +254,7 @@ def score_liquidity(
 # ---------------------------------------------------------------------------
 # Fundamental scorer (~10 pts max, optional)
 # ---------------------------------------------------------------------------
+
 
 def score_fundamental(
     snapshot: FinancialSnapshot | None,

@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 统一的技术指标计算模块
 Technical Indicators Module
 
 所有技术指标集中在这里，避免重复实现
 """
-
-from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -100,7 +97,7 @@ def rsi(close: pd.Series, period: int = 14) -> pd.Series:
 
 def macd(
     close: pd.Series, fast_period: int = 12, slow_period: int = 26, signal_period: int = 9
-) -> Tuple[pd.Series, pd.Series, pd.Series]:
+) -> tuple[pd.Series, pd.Series, pd.Series]:
     """
     MACD指标 (Moving Average Convergence Divergence)
 
@@ -125,7 +122,7 @@ def macd(
 
 def bollinger_bands(
     close: pd.Series, period: int = 20, std_dev: float = 2.0
-) -> Tuple[pd.Series, pd.Series, pd.Series]:
+) -> tuple[pd.Series, pd.Series, pd.Series]:
     """
     布林带 (Bollinger Bands)
 
@@ -148,7 +145,7 @@ def bollinger_bands(
 
 def stochastic(
     high: pd.Series, low: pd.Series, close: pd.Series, k_period: int = 14, d_period: int = 3
-) -> Tuple[pd.Series, pd.Series]:
+) -> tuple[pd.Series, pd.Series]:
     """
     随机指标 (Stochastic Oscillator)
 

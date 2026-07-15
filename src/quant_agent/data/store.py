@@ -12,7 +12,6 @@ import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
@@ -35,7 +34,7 @@ class FileLock:
 
     def __init__(self, lock_path: str | Path) -> None:
         self._lock_path = Path(lock_path)
-        self._fd: Optional[int] = None
+        self._fd: int | None = None
 
     def acquire(self) -> None:
         self._lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -50,7 +49,7 @@ class FileLock:
                 os.close(self._fd)
                 self._fd = None
 
-    def __enter__(self) -> "FileLock":
+    def __enter__(self) -> FileLock:
         self.acquire()
         return self
 
@@ -95,9 +94,7 @@ class DataStore:
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
-    def save_price(
-        self, stock_code: str, df: pd.DataFrame, source: str = "unknown"
-    ) -> Path:
+    def save_price(self, stock_code: str, df: pd.DataFrame, source: str = "unknown") -> Path:
         """保存行情数据到 Parquet（原子写入）"""
         if df is None or df.empty:
             return Path("")
@@ -106,7 +103,7 @@ class DataStore:
         logger.debug(f"保存行情: {path} ({len(df)}行, source={source})")
         return path
 
-    def load_price(self, stock_code: str) -> Optional[pd.DataFrame]:
+    def load_price(self, stock_code: str) -> pd.DataFrame | None:
         """加载行情数据"""
         path = self.base_dir / "price" / f"{stock_code}.parquet"
         if not path.exists():
@@ -115,9 +112,7 @@ class DataStore:
         logger.debug(f"加载行情: {path} ({len(df)}行)")
         return df
 
-    def save_financial(
-        self, stock_code: str, data: dict, source: str = "unknown"
-    ) -> Path:
+    def save_financial(self, stock_code: str, data: dict, source: str = "unknown") -> Path:
         """保存财务快照到 Parquet（追加模式，文件锁保护 read-modify-write）
 
         使用与目标 parquet 同目录的 .lock 文件，确保两个进程同时
@@ -139,7 +134,7 @@ class DataStore:
         logger.debug(f"保存财务: {path} (source={source})")
         return path
 
-    def load_financial(self, stock_code: str, latest: bool = True) -> Optional[pd.DataFrame]:
+    def load_financial(self, stock_code: str, latest: bool = True) -> pd.DataFrame | None:
         """加载财务数据"""
         path = self.base_dir / "financial" / f"{stock_code}.parquet"
         if not path.exists():
@@ -162,5 +157,6 @@ class DataStore:
         if not path.exists():
             return False
         import time
+
         age_hours = (time.time() - path.stat().st_mtime) / 3600
         return age_hours < max_age_hours

@@ -7,23 +7,22 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 
+from .agents.base import AgentResult
+from .agents.execution import ExecutionAgent
+from .agents.fundamental import FundamentalAgent
+from .agents.planner import ExecutionPlan, PlannerAgent
+from .agents.risk import RiskAgent
+from .agents.sentiment import SentimentAgent
+from .agents.technical import TechnicalAgent
 from .audit import AuditLogger
 from .config import Settings, get_settings
 from .data.service import DataService
 from .data.validators import validate_stock_code
 from .llm.client import LLMClient, LLMError, get_llm_client_soft
 from .llm.report import LLMReportGenerator
-from .agents.base import AgentResult
-from .agents.fundamental import FundamentalAgent
-from .agents.technical import TechnicalAgent
-from .agents.sentiment import SentimentAgent
-from .agents.planner import PlannerAgent, ExecutionPlan
-from .agents.risk import RiskAgent
-from .agents.execution import ExecutionAgent, Order
 from .notification.email import EmailNotifier
-from .observability.metrics import MetricsCollector, HealthChecker
+from .observability.metrics import HealthChecker, MetricsCollector
 from .trading.service import TradingService
 
 logger = logging.getLogger(__name__)
@@ -35,22 +34,27 @@ class AnalysisReport:
 
     stock_code: str
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
-    fundamental_result: Optional[AgentResult] = None
-    technical_result: Optional[AgentResult] = None
-    sentiment_result: Optional[AgentResult] = None
-    risk_result: Optional[AgentResult] = None
-    execution_result: Optional[AgentResult] = None
-    llm_analysis: Optional[str] = None
-    risk_interpretation: Optional[str] = None
+    fundamental_result: AgentResult | None = None
+    technical_result: AgentResult | None = None
+    sentiment_result: AgentResult | None = None
+    risk_result: AgentResult | None = None
+    execution_result: AgentResult | None = None
+    llm_analysis: str | None = None
+    risk_interpretation: str | None = None
     summary: dict = field(default_factory=dict)
+    # 数据谱系 (P3)：本次分析所依赖数据的来源与时间记录
+    data_lineage: list = field(default_factory=list)
 
     def to_dict(self) -> dict:
+        lineage = [p.to_dict() for p in self.data_lineage] if self.data_lineage else []
         return {
             "stock_code": self.stock_code,
             "timestamp": self.timestamp,
             "signal": self.risk_result.signal if self.risk_result else "HOLD",
             "confidence": self.risk_result.confidence if self.risk_result else 0.0,
-            "position_pct": self.risk_result.metrics.get("position", 0.0) if self.risk_result else 0.0,
+            "position_pct": self.risk_result.metrics.get("position", 0.0)
+            if self.risk_result
+            else 0.0,
             "fundamental": self.fundamental_result.to_dict() if self.fundamental_result else None,
             "technical": self.technical_result.to_dict() if self.technical_result else None,
             "sentiment": self.sentiment_result.to_dict() if self.sentiment_result else None,
@@ -59,6 +63,7 @@ class AnalysisReport:
             "llm_analysis": self.llm_analysis,
             "risk_interpretation": self.risk_interpretation,
             "summary": self.summary,
+            "data_lineage": lineage,
         }
 
 
@@ -69,7 +74,7 @@ class Orchestrator:
     支持 LLM 增强：情感分析、智能指令解析、综合报告生成、风险解读。
     """
 
-    def __init__(self, settings: Optional[Settings] = None, offline: Optional[bool] = None):
+    def __init__(self, settings: Settings | None = None, offline: bool | None = None):
         base = settings or get_settings()
         # 复制一份 settings，避免覆盖进程级单例（get_settings 被 lru_cache 缓存）。
         # offline 为 None 时沿用全局设置；为 True/False 时以运行时参数为准
@@ -95,7 +100,7 @@ class Orchestrator:
         self.audit_logger = AuditLogger(log_dir=audit_dir)
 
         # LLM 客户端 (软降级 — 无 API key 时进入离线规则增强模式，功能不中断)
-        self.llm: Optional[LLMClient] = None
+        self.llm: LLMClient | None = None
         try:
             self.llm = get_llm_client_soft()
         except LLMError as e:
@@ -115,7 +120,7 @@ class Orchestrator:
         )
 
         # LLM 报告生成器
-        self.report_gen: Optional[LLMReportGenerator] = None
+        self.report_gen: LLMReportGenerator | None = None
         if self.llm:
             self.report_gen = LLMReportGenerator(self.llm)
 
@@ -144,6 +149,7 @@ class Orchestrator:
         """Lazy-loaded ScreeningEngine."""
         if self._screener is None:
             from .screener import ScreeningEngine
+
             self._screener = ScreeningEngine(
                 data_service=self.data,
                 settings=self.settings,
@@ -158,9 +164,13 @@ class Orchestrator:
         except Exception as e:
             logger.warning("Agent %s failed: %s", name, e)
             return AgentResult(
-                agent_name=name, stock_code=stock_code,
-                signal="HOLD", confidence=0.0,
-                reasoning=f"Agent failed: {e}", success=False, error=str(e),
+                agent_name=name,
+                stock_code=stock_code,
+                signal="HOLD",
+                confidence=0.0,
+                reasoning=f"Agent failed: {e}",
+                success=False,
+                error=str(e),
             )
 
     def _analyze_safe(self, code: str, days: int) -> AnalysisReport:
@@ -227,8 +237,16 @@ class Orchestrator:
                     report.sentiment_result = result
 
                 status = "OK" if result.success else "FAIL"
-                logger.info("  %s %s: %s (%.0f%%)", status, result.agent_name, result.signal, result.confidence)
-                self.metrics.counter("analysis.runs", 1, {"agent": name, "success": str(result.success)})
+                logger.info(
+                    "  %s %s: %s (%.0f%%)",
+                    status,
+                    result.agent_name,
+                    result.signal,
+                    result.confidence,
+                )
+                self.metrics.counter(
+                    "analysis.runs", 1, {"agent": name, "success": str(result.success)}
+                )
 
         # c. 风控汇总 — pass portfolio context for portfolio-level risk controls
         #    The execution phase (risk → stop-check → execute → summary) must be
@@ -245,13 +263,18 @@ class Orchestrator:
             current_date = datetime.now().strftime("%Y-%m-%d")
 
             risk_result = self.risk.analyze(
-                stock_code, analysis_results,
+                stock_code,
+                analysis_results,
                 current_positions=current_positions,
                 current_equity=current_equity,
                 current_date=current_date,
             )
             report.risk_result = risk_result
-            logger.info("  Risk: %s (position %.1f%%)", risk_result.signal, risk_result.metrics.get("position", 0))
+            logger.info(
+                "  Risk: %s (position %.1f%%)",
+                risk_result.signal,
+                risk_result.metrics.get("position", 0),
+            )
             logger.info("     %s", risk_result.reasoning)
 
             # c2. LLM 风险解读 (可选)
@@ -281,6 +304,9 @@ class Orchestrator:
         logger.info("  Cash: %.2f", summary["cash"])
         logger.info("  Position value: %.2f", summary["position_value"])
         logger.info("  Return: %.2f%%", summary["total_return"] * 100)
+
+        # e2. 数据谱系：汇总本次分析所依赖数据的来源与时间（P3 透明展示）
+        report.data_lineage = self.data.get_lineage(stock_code)
 
         # f. LLM 综合报告 (可选)
         if self.report_gen and self.llm and self.llm.enabled:
@@ -318,8 +344,9 @@ class Orchestrator:
         if not plan.stock_code:
             raise ValueError(f"无法从指令中识别股票代码: {user_input}")
 
-        logger.info("Parsed intent: stock=%s days=%d focus=%s",
-                     plan.stock_code, plan.days, plan.focus_areas)
+        logger.info(
+            "Parsed intent: stock=%s days=%d focus=%s", plan.stock_code, plan.days, plan.focus_areas
+        )
         return self.analyze(plan.stock_code, days=plan.days)
 
     def analyze_batch(self, stock_codes: list[str], days: int = 120) -> list[AnalysisReport]:

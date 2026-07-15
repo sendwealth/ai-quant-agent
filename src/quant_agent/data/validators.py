@@ -27,9 +27,7 @@ def validate_stock_code(code: str) -> str:
     cleaned = str(code).strip()
 
     if not cleaned.isdigit():
-        raise ValueError(
-            f"Invalid stock code '{code}': must contain only digits"
-        )
+        raise ValueError(f"Invalid stock code '{code}': must contain only digits")
 
     if len(cleaned) != 6:
         raise ValueError(

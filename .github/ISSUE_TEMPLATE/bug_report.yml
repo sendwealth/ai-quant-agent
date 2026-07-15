@@ -1,0 +1,46 @@
+name: Bug report
+description: 报告一个可复现的问题
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 问题描述
+      description: 简明描述出现了什么异常行为。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 用于复现的命令、输入与环境。
+      placeholder: |
+        1. 运行 `uv run quant-agent analyze 600519`
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: 环境信息
+      description: uv/python 版本、操作系统、是否启用 LLM key。
+      placeholder: |
+        - uv run python --version:
+        - OS:
+        - LLM enabled: yes/no
+    validations:
+      required: false
+  - type: checkboxes
+    id: secrets
+    attributes:
+      label: 安全确认
+      options:
+        - label: 我已确认本报告中不包含任何 API key / 私钥 / 真实凭据。
+          required: true

@@ -1,10 +1,10 @@
 """EfinanceSource 单元测试 — ABC 合规、列映射、代码转换、重试、速率限制"""
 
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
-import pandas as pd
-import numpy as np
+from unittest.mock import MagicMock, patch
 
+import numpy as np
+import pandas as pd
+import pytest
 
 # ── Helpers ──
 
@@ -13,38 +13,45 @@ def _make_efinance_price_df(n=50):
     """Build a fake efinance-style DataFrame with Chinese column names."""
     dates = pd.date_range("2025-01-01", periods=n, freq="B")
     close = 100 + np.cumsum(np.random.randn(n))
-    return pd.DataFrame({
-        "日期": dates.strftime("%Y-%m-%d"),
-        "开盘": close - np.random.rand(n),
-        "收盘": close,
-        "最高": close + np.random.rand(n) * 2,
-        "最低": close - np.random.rand(n) * 2,
-        "成交量": np.random.randint(100000, 500000, n).astype(float),
-        "成交额": np.random.rand(n) * 1e8,
-        "涨跌幅": np.random.randn(n) * 2,
-        "换手率": np.random.rand(n) * 5,
-    })
+    return pd.DataFrame(
+        {
+            "日期": dates.strftime("%Y-%m-%d"),
+            "开盘": close - np.random.rand(n),
+            "收盘": close,
+            "最高": close + np.random.rand(n) * 2,
+            "最低": close - np.random.rand(n) * 2,
+            "成交量": np.random.randint(100000, 500000, n).astype(float),
+            "成交额": np.random.rand(n) * 1e8,
+            "涨跌幅": np.random.randn(n) * 2,
+            "换手率": np.random.rand(n) * 5,
+        }
+    )
 
 
 def _make_efinance_financial_df():
     """Build a fake efinance financial performance DataFrame."""
-    return pd.DataFrame([{
-        "报告期": "2025-06-30",
-        "净资产收益率": 18.5,
-        "毛利率": 35.2,
-        "净利率": 12.8,
-        "资产负债率": 45.0,
-        "流动比率": 1.8,
-        "营收同比增长率": 25.3,
-        "净利润同比增长率": 30.1,
-        "市盈率": 25.0,
-        "市净率": 5.6,
-    }])
+    return pd.DataFrame(
+        [
+            {
+                "报告期": "2025-06-30",
+                "净资产收益率": 18.5,
+                "毛利率": 35.2,
+                "净利率": 12.8,
+                "资产负债率": 45.0,
+                "流动比率": 1.8,
+                "营收同比增长率": 25.3,
+                "净利润同比增长率": 30.1,
+                "市盈率": 25.0,
+                "市净率": 5.6,
+            }
+        ]
+    )
 
 
 def _create_source(**kwargs):
     """Create EfinanceSource with mocked rate limiter."""
     from quant_agent.data.sources.efinance import EfinanceSource
+
     source = EfinanceSource(**kwargs)
     source._rate_limiter = MagicMock()
     return source
@@ -60,7 +67,7 @@ class TestEfinanceABC:
 
     def test_is_datasource(self):
         from quant_agent.data.sources.base import DataSource
-        from quant_agent.data.sources.efinance import EfinanceSource
+
         src = _create_source()
         assert isinstance(src, DataSource)
 
@@ -201,10 +208,14 @@ class TestFinancialSnapshot:
     def test_percentage_normalization(self, mock_fin, mock_price):
         """Values > 1 for ratio fields are divided by 100"""
         src = _create_source()
-        mock_fin.return_value = pd.DataFrame([{
-            "报告期": "2025-06-30",
-            "净资产收益率": 22.5,  # > 1, should be /100
-        }])
+        mock_fin.return_value = pd.DataFrame(
+            [
+                {
+                    "报告期": "2025-06-30",
+                    "净资产收益率": 22.5,  # > 1, should be /100
+                }
+            ]
+        )
         mock_price.return_value = pd.DataFrame({"收盘": [50.0]})
 
         result = src.get_financial_snapshot("300750")
@@ -304,10 +315,14 @@ class TestRateLimiter:
         src.get_price_data("300750", days=5)
         src._rate_limiter.block_until_ready.assert_called()
 
+    @patch("efinance.stock.get_quote_history")
     @patch("efinance.stock.get_all_company_performance")
-    def test_rate_limiter_called_for_financial(self, mock_fin):
+    def test_rate_limiter_called_for_financial(self, mock_fin, mock_price):
         src = _create_source()
         mock_fin.return_value = _make_efinance_financial_df()
+        # get_financial_snapshot also fetches a realtime price via
+        # get_quote_history; mock it so the test stays fully offline.
+        mock_price.return_value = pd.DataFrame({"收盘": [100.0]})
 
         src.get_financial_snapshot("300750")
         src._rate_limiter.block_until_ready.assert_called()

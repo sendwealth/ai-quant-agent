@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 import pandas as pd
 
@@ -14,6 +13,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ValidationReport:
     """数据校验报告"""
+
     is_valid: bool = True
     total_rows: int = 0
     null_count: int = 0
@@ -66,7 +66,7 @@ def validate_price_data(
         report.stale_rows = stale_mask.sum()
         if report.stale_rows > report.total_rows * 0.5:
             report.warnings.append(
-                f"停牌天数占比 {(report.stale_rows/report.total_rows):.1%}，数据可能不完整"
+                f"停牌天数占比 {(report.stale_rows / report.total_rows):.1%}，数据可能不完整"
             )
 
     # 3. 异常值检测（涨跌幅）
@@ -78,7 +78,9 @@ def validate_price_data(
             outlier_mask = outlier_mask & (df["volume"] > 0)
         report.outlier_rows = outlier_mask.sum()
         if report.outlier_rows > 0:
-            report.warnings.append(f"检测到 {report.outlier_rows} 个异常涨跌幅（>{max_daily_return:.0%}）")
+            report.warnings.append(
+                f"检测到 {report.outlier_rows} 个异常涨跌幅（>{max_daily_return:.0%}）"
+            )
 
     # 4. 价格合理性
     if "close" in df.columns:
@@ -129,7 +131,7 @@ def clean_price_data(
 def repair_price_data(
     df: pd.DataFrame,
     max_null_pct: float = 0.05,
-) -> Optional[pd.DataFrame]:
+) -> pd.DataFrame | None:
     """Attempt to repair data quality issues in price data.
 
     Repair strategies:
@@ -174,8 +176,7 @@ def repair_price_data(
     new_nulls = result.isna().sum().sum()
     if orig_nulls > 0:
         logger.info(
-            f"Data repair: {orig_nulls} nulls → {new_nulls}, "
-            f"rows {len(df)} → {len(result)}"
+            f"Data repair: {orig_nulls} nulls → {new_nulls}, rows {len(df)} → {len(result)}"
         )
 
     return result

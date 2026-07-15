@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
-from typing import Optional, TypeVar, Type
+from typing import TypeVar
 
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from ..config import Settings, get_settings
@@ -44,13 +44,13 @@ class LLMClient:
     保证上层三大 LLM 增强功能（情感/报告/风险解读）不中断。
     """
 
-    def __init__(self, settings: Optional[Settings] = None, soft_fail: bool = False):
+    def __init__(self, settings: Settings | None = None, soft_fail: bool = False):
         self.settings = settings or get_settings()
         self.soft_fail = soft_fail
         self.enabled = False
-        self.provider: Optional[str] = None
+        self.provider: str | None = None
         self.model = self.settings.openai_model
-        self.llm: Optional[ChatOpenAI] = None
+        self.llm: ChatOpenAI | None = None
 
         api_key, model, base_url, provider = self._resolve_provider()
 
@@ -62,8 +62,7 @@ class LLMClient:
                 )
                 return
             raise LLMError(
-                "No API key configured. "
-                "Set QUANT_OPENAI_API_KEY or QUANT_ZHIPU_API_KEY in .env"
+                "No API key configured. Set QUANT_OPENAI_API_KEY or QUANT_ZHIPU_API_KEY in .env"
             )
 
         self.model = model
@@ -79,7 +78,7 @@ class LLMClient:
         self.enabled = True
         logger.info("LLMClient initialized: provider=%s model=%s", provider, model)
 
-    def _resolve_provider(self) -> tuple[Optional[str], str, str, Optional[str]]:
+    def _resolve_provider(self) -> tuple[str | None, str, str, str | None]:
         """解析 provider 与连接参数。
 
         Returns:
@@ -166,7 +165,7 @@ class LLMClient:
         except Exception as e:
             raise LLMError(f"LLM invoke failed: {e}") from e
 
-    def structured_output(self, system: str, user: str, schema: Type[T]) -> T:
+    def structured_output(self, system: str, user: str, schema: type[T]) -> T:
         """结构化输出 — 返回 Pydantic 模型实例
 
         Args:

@@ -3,18 +3,44 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 
 
+@dataclass
+class DataProvenance:
+    """数据谱系 — 记录一份数据的来源与获取时间（P3 数据谱系）。
+
+    用于在分析报告中透明展示「数据从哪来、何时获取、可信度如何」，
+    满足开源成熟度对数据可溯源的要求。
+    """
+
+    source: str  # 数据源名称：tushare / efinance / akshare / baostock / cache / sample / merged
+    identifier: str  # 数据标识：通常为股票代码，或 "CODE:financial" / "CODE:price"
+    fetched_at: str  # 获取时间（ISO 8601）
+    data_type: str  # price / financial
+    confidence: str = "high"  # high / partial / low
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source": self.source,
+            "identifier": self.identifier,
+            "fetched_at": self.fetched_at,
+            "data_type": self.data_type,
+            "confidence": self.confidence,
+        }
+
+
 class StatementType(str, Enum):
     """财务报表类型"""
-    INCOME = "income"           # 利润表
-    BALANCE = "balance"         # 资产负债表
-    CASHFLOW = "cashflow"       # 现金流量表
-    INDICATORS = "indicators"   # 财务指标
+
+    INCOME = "income"  # 利润表
+    BALANCE = "balance"  # 资产负债表
+    CASHFLOW = "cashflow"  # 现金流量表
+    INDICATORS = "indicators"  # 财务指标
 
 
 class FinancialSnapshot:
@@ -32,30 +58,36 @@ class FinancialSnapshot:
     # required: True 表示 validate() 时视为必填
     SCHEMA: dict[str, tuple[tuple[type, ...], bool, str]] = {
         # 盈利能力
-        "roe":             ((float, int), True,  "净资产收益率"),
-        "gross_margin":    ((float, int), True,  "毛利率"),
-        "net_margin":      ((float, int), True,  "净利率"),
+        "roe": ((float, int), True, "净资产收益率"),
+        "gross_margin": ((float, int), True, "毛利率"),
+        "net_margin": ((float, int), True, "净利率"),
         # 偿债能力
-        "debt_ratio":      ((float, int), True,  "资产负债率"),
-        "current_ratio":   ((float, int), False, "流动比率"),
+        "debt_ratio": ((float, int), True, "资产负债率"),
+        "current_ratio": ((float, int), False, "流动比率"),
         # 成长性
-        "revenue_growth":  ((float, int), True,  "营收增长率"),
-        "profit_growth":   ((float, int), True,  "净利润增长率"),
+        "revenue_growth": ((float, int), True, "营收增长率"),
+        "profit_growth": ((float, int), True, "净利润增长率"),
         # 估值
-        "pe_ttm":          ((float, int), False, "市盈率 TTM"),
-        "pb":              ((float, int), False, "市净率"),
-        "ps_ttm":          ((float, int), False, "市销率 TTM"),
+        "pe_ttm": ((float, int), False, "市盈率 TTM"),
+        "pb": ((float, int), False, "市净率"),
+        "ps_ttm": ((float, int), False, "市销率 TTM"),
         # 市值 / 价格
-        "total_mv":        ((float, int), False, "总市值（万元）"),
-        "price":           ((float, int), False, "最新价格"),
+        "total_mv": ((float, int), False, "总市值（万元）"),
+        "price": ((float, int), False, "最新价格"),
         # 元数据
-        "report_date":     ((str,),       False, "报告期"),
+        "report_date": ((str,), False, "报告期"),
         # 审计用（Tushare 交叉验证计算值）
-        "roe_calc":        ((float, int), False, "ROE 计算值（审计用）"),
+        "roe_calc": ((float, int), False, "ROE 计算值（审计用）"),
     }
 
-    def __init__(self, stock_code: str, data: dict[str, Any]):
+    def __init__(
+        self,
+        stock_code: str,
+        data: dict[str, Any],
+        provenance: list[DataProvenance] | None = None,
+    ):
         self.stock_code = stock_code
+        self._provenance: list[DataProvenance] = list(provenance or [])
         # ── 类型校验：对 schema 中的已知键检查值类型 ──
         errors: list[str] = []
         for key, (expected_types, _required, _desc) in self.SCHEMA.items():
@@ -71,8 +103,7 @@ class FinancialSnapshot:
                 )
         if errors:
             raise ValueError(
-                f"FinancialSnapshot({stock_code}): schema violation:\n"
-                + "\n".join(errors)
+                f"FinancialSnapshot({stock_code}): schema violation:\n" + "\n".join(errors)
             )
         self._data = data
 
@@ -83,47 +114,47 @@ class FinancialSnapshot:
     # ── 属性访问器 ───────────────────────────────────────────────
 
     @property
-    def roe(self) -> Optional[float]:
+    def roe(self) -> float | None:
         """净资产收益率（真实计算）"""
         return self._data.get("roe")
 
     @property
-    def gross_margin(self) -> Optional[float]:
+    def gross_margin(self) -> float | None:
         """毛利率"""
         return self._data.get("gross_margin")
 
     @property
-    def net_margin(self) -> Optional[float]:
+    def net_margin(self) -> float | None:
         """净利率"""
         return self._data.get("net_margin")
 
     @property
-    def debt_ratio(self) -> Optional[float]:
+    def debt_ratio(self) -> float | None:
         """资产负债率"""
         return self._data.get("debt_ratio")
 
     @property
-    def current_ratio(self) -> Optional[float]:
+    def current_ratio(self) -> float | None:
         """流动比率"""
         return self._data.get("current_ratio")
 
     @property
-    def pe_ttm(self) -> Optional[float]:
+    def pe_ttm(self) -> float | None:
         """市盈率 TTM"""
         return self._data.get("pe_ttm")
 
     @property
-    def pb(self) -> Optional[float]:
+    def pb(self) -> float | None:
         """市净率"""
         return self._data.get("pb")
 
     @property
-    def revenue_growth(self) -> Optional[float]:
+    def revenue_growth(self) -> float | None:
         """营收增长率"""
         return self._data.get("revenue_growth")
 
     @property
-    def profit_growth(self) -> Optional[float]:
+    def profit_growth(self) -> float | None:
         """净利润增长率"""
         return self._data.get("profit_growth")
 
@@ -135,8 +166,20 @@ class FinancialSnapshot:
     def get(self, key: str, default: Any = None) -> Any:
         return self._data.get(key, default)
 
+    @property
+    def provenance(self) -> list[DataProvenance]:
+        """数据谱系：本快照来自哪些数据源及获取时间。"""
+        return self._provenance
+
+    def add_provenance(self, prov: DataProvenance) -> None:
+        """追加一条数据谱系记录。"""
+        self._provenance.append(prov)
+
     def to_dict(self) -> dict[str, Any]:
-        return {**self._data, "stock_code": self.stock_code}
+        d = {**self._data, "stock_code": self.stock_code}
+        if self._provenance:
+            d["provenance"] = [p.to_dict() for p in self._provenance]
+        return d
 
     # ── 验证 ────────────────────────────────────────────────────
 
@@ -217,7 +260,7 @@ class DataSource(ABC):
     @abstractmethod
     def get_price_data(
         self, stock_code: str, days: int = 250, adjust: str = "qfq"
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """获取历史行情数据
 
         Args:
@@ -231,13 +274,13 @@ class DataSource(ABC):
         ...
 
     @abstractmethod
-    def get_realtime_price(self, stock_code: str) -> Optional[float]:
+    def get_realtime_price(self, stock_code: str) -> float | None:
         """获取实时价格"""
         ...
 
     def get_financial_statements(
         self, stock_code: str, statement_type: StatementType, periods: int = 4
-    ) -> Optional[pd.DataFrame]:
+    ) -> pd.DataFrame | None:
         """获取财务报表
 
         Args:
@@ -251,7 +294,7 @@ class DataSource(ABC):
         # 默认不支持，子类可选实现
         return None
 
-    def get_financial_snapshot(self, stock_code: str) -> Optional[FinancialSnapshot]:
+    def get_financial_snapshot(self, stock_code: str) -> FinancialSnapshot | None:
         """获取财务快照（核心指标汇总）
 
         默认实现：分别获取各报表后计算。子类可覆写以优化。

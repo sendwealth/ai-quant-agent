@@ -34,6 +34,9 @@ dev = [
     "black>=23.0.0",
     "mypy>=1.0.0",
 ]
+baostock = [
+    "baostock>=0.9.3",
+]
 
 [project.scripts]
 quant-agent = "quant_agent.cli:app"
@@ -44,7 +47,18 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests/unit", "tests"]
 python_files = ["test_*.py"]
-addopts = "-v --tb=short"
+# P0-03: unit/integration must never touch the network. Live data-source
+# connectivity checks live under tests/smoke and are excluded by default
+# (override with: uv run pytest -m smoke).
+addopts = [
+    "-v",
+    "--tb=short",
+    "--disable-socket",
+    "-m", "not smoke",
+]
+markers = [
+    "smoke: live external data-source connectivity test (requires network access)",
+]
 norecursedirs = ["tests/archive"]
 
 [tool.black]
@@ -55,3 +69,41 @@ target-version = ['py310']
 python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
+# 第三方库（pandas/typer 等）未提供类型 stub，忽略缺失导入噪音；
+# 真实类型错误仍会报告。
+ignore_missing_imports = true
+disable_error_code = ["import-untyped"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "C4",  # flake8-comprehensions
+]
+ignore = [
+    "E501",  # line too long handled by formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may use broad assertions / dynamic fixtures.
+"tests/**" = ["B011", "F841"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.0",
+    "pytest-socket>=0.8.0",
+    "ruff>=0.15.21",
+    "pytest-cov>=4.0.0",
+]

@@ -8,7 +8,6 @@ Filters run in two phases:
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 import pandas as pd
 
@@ -110,6 +109,7 @@ class PreFilter:
 
         self._logger.info(
             "Price/liquidity filter: %d → %d stocks",
-            len(price_data), len(filtered),
+            len(price_data),
+            len(filtered),
         )
         return filtered

@@ -7,7 +7,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Metric:
     """指标"""
+
     name: str
     value: float
     tags: dict[str, str] = field(default_factory=dict)
@@ -24,6 +25,7 @@ class Metric:
 @dataclass
 class HealthStatus:
     """健康状态"""
+
     healthy: bool = True
     checks: dict[str, bool] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
@@ -57,7 +59,7 @@ class MetricsCollector:
     def _record(self, name: str, value: float, tags: dict = None):
         self._metrics.append(Metric(name=name, value=value, tags=tags or {}))
 
-    def get(self, name: str, tags: dict = None) -> Optional[float]:
+    def get(self, name: str, tags: dict = None) -> float | None:
         key = self._key(name, tags)
         return self._gauges.get(key) or (self._counters.get(key) if key in self._counters else None)
 
@@ -99,9 +101,7 @@ class HealthChecker:
         self._checks[name] = check_fn
 
     def check(self) -> HealthStatus:
-        status = HealthStatus(
-            timestamp=datetime.now().isoformat()
-        )
+        status = HealthStatus(timestamp=datetime.now().isoformat())
         for name, fn in self._checks.items():
             try:
                 ok = fn()

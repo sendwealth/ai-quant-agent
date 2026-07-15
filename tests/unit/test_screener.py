@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
@@ -21,8 +21,7 @@ from quant_agent.screener.scorers import (
     score_momentum,
     score_technical,
 )
-from quant_agent.thresholds import _Thresh, get_thresholds, reset_thresholds
-
+from quant_agent.thresholds import get_thresholds, reset_thresholds
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -52,14 +51,16 @@ def _make_df(
     else:
         close = np.full(n, base_price) + np.random.RandomState(42).randn(n) * 0.5
 
-    return pd.DataFrame({
-        "date": dates.strftime("%Y%m%d"),
-        "close": close,
-        "high": close + 1,
-        "low": close - 1,
-        "volume": np.ones(n) * 100000,
-        "amount": np.ones(n) * avg_amount,
-    })
+    return pd.DataFrame(
+        {
+            "date": dates.strftime("%Y%m%d"),
+            "close": close,
+            "high": close + 1,
+            "low": close - 1,
+            "volume": np.ones(n) * 100000,
+            "amount": np.ones(n) * avg_amount,
+        }
+    )
 
 
 @pytest.fixture
@@ -121,10 +122,12 @@ class TestPreFilter:
         assert PreFilter.is_st("退市海润") is True
 
     def test_filter_universe_removes_st(self):
-        df = pd.DataFrame({
-            "symbol": ["300750", "600000", "000001"],
-            "name": ["宁德时代", "ST平安", "平安银行"],
-        })
+        df = pd.DataFrame(
+            {
+                "symbol": ["300750", "600000", "000001"],
+                "name": ["宁德时代", "ST平安", "平安银行"],
+            }
+        )
         pf = PreFilter()
         result = pf.filter_universe(df)
         assert len(result) == 2
@@ -262,6 +265,7 @@ class TestScorers:
 
     def test_tier_score_matching(self):
         from quant_agent.screener.scorers import _tier_score
+
         tiers = [[0.10, 15], [0.05, 10], [0.00, 5]]
         assert _tier_score(0.15, tiers) == 15
         assert _tier_score(0.08, tiers) == 10
@@ -274,7 +278,8 @@ class TestScorers:
         breakdown = result["breakdown"]
         # Compute score from non-_value fields only
         expected = sum(
-            v for k, v in breakdown.items()
+            v
+            for k, v in breakdown.items()
             if isinstance(v, (int, float)) and not k.endswith("_value")
         )
         assert result["technical"] == expected
@@ -289,7 +294,8 @@ class TestScorers:
         result = score_momentum(uptrend_df, thresh.momentum)
         breakdown = result["breakdown"]
         expected = sum(
-            v for k, v in breakdown.items()
+            v
+            for k, v in breakdown.items()
             if isinstance(v, (int, float)) and not k.endswith("_value")
         )
         assert result["momentum"] == expected
@@ -299,7 +305,8 @@ class TestScorers:
         result = score_liquidity(uptrend_df, thresh.liquidity)
         breakdown = result["breakdown"]
         expected = sum(
-            v for k, v in breakdown.items()
+            v
+            for k, v in breakdown.items()
             if isinstance(v, (int, float)) and not k.endswith("_value")
         )
         assert result["liquidity"] == expected
@@ -340,10 +347,12 @@ class TestScorers:
         # Wild swings → high volatility
         close = 50 + np.cumsum(np.random.randn(n) * 5)
         close = np.maximum(close, 5.0)
-        df = pd.DataFrame({
-            "date": dates.strftime("%Y%m%d"),
-            "close": close,
-        })
+        df = pd.DataFrame(
+            {
+                "date": dates.strftime("%Y%m%d"),
+                "close": close,
+            }
+        )
         result = score_momentum(df, thresh.momentum)
         # Volatility score may be 0 or low
         assert isinstance(result["breakdown"]["volatility"], float)
@@ -422,10 +431,12 @@ class TestScreeningEngine:
 
     def test_full_market_flag(self, mock_data_service):
         mock_bs = MagicMock()
-        mock_bs.get_stock_list.return_value = pd.DataFrame({
-            "symbol": ["300750", "002475"],
-            "name": ["宁德时代", "赣锋锂业"],
-        })
+        mock_bs.get_stock_list.return_value = pd.DataFrame(
+            {
+                "symbol": ["300750", "002475"],
+                "name": ["宁德时代", "赣锋锂业"],
+            }
+        )
         mock_data_service.baostock = mock_bs
 
         engine = ScreeningEngine(data_service=mock_data_service)

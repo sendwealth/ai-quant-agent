@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +21,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class Position:
@@ -62,16 +62,16 @@ class Trade:
     """Record of a single trade execution."""
 
     stock_code: str
-    direction: str           # "buy" / "sell"
+    direction: str  # "buy" / "sell"
     entry_date: str = ""
-    exit_date: Optional[str] = None
+    exit_date: str | None = None
     entry_price: float = 0.0
     exit_price: float = 0.0
     shares: int = 0
     pnl: float = 0.0
     pnl_pct: float = 0.0
     commission: float = 0.0
-    status: str = "open"     # "open" / "closed"
+    status: str = "open"  # "open" / "closed"
 
     @property
     def is_closed(self) -> bool:
@@ -81,6 +81,7 @@ class Trade:
 # ---------------------------------------------------------------------------
 # Commission model
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class CommissionModel:
@@ -105,6 +106,7 @@ class CommissionModel:
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+
 def round_shares(shares: int) -> int:
     """Round down to the nearest board lot (100 shares) for A-shares."""
     return (shares // 100) * 100
@@ -113,6 +115,7 @@ def round_shares(shares: int) -> int:
 # ---------------------------------------------------------------------------
 # Portfolio
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class Portfolio:
@@ -154,7 +157,7 @@ class Portfolio:
 
     # -- position helpers ----------------------------------------------------
 
-    def get_position(self, stock_code: str) -> Optional[Position]:
+    def get_position(self, stock_code: str) -> Position | None:
         return self.positions.get(stock_code)
 
     def update_price(self, stock_code: str, price: float) -> None:
@@ -207,9 +210,8 @@ class Portfolio:
         if existing is not None:
             total_shares = existing.shares + shares
             existing.avg_price = (
-                (existing.avg_price * existing.shares + price * shares)
-                / total_shares
-            )
+                existing.avg_price * existing.shares + price * shares
+            ) / total_shares
             existing.shares = total_shares
             existing.current_price = price
         else:
@@ -238,7 +240,7 @@ class Portfolio:
         price: float,
         shares: int | None = None,
         commission: float | None = None,
-    ) -> Optional[Trade]:
+    ) -> Trade | None:
         """Close (part of) a position.
 
         If *shares* is *None*, the entire position is sold.

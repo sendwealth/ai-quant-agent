@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from quant_agent.llm.client import LLMClient, LLMError, get_llm_client
-
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 

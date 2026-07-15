@@ -1,12 +1,15 @@
 """回测引擎单元测试"""
 
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
 
 from quant_agent.backtest.engine import (
-    BacktestEngine, BacktestResult, Portfolio, Trade,
-    CommissionModel, SlippageModel,
+    BacktestEngine,
+    BacktestResult,
+    CommissionModel,
+    Portfolio,
+    SlippageModel,
 )
 
 
@@ -16,13 +19,15 @@ def uptrend_data():
     n = 120
     dates = pd.date_range("2025-01-01", periods=n, freq="B")
     close = 100 + np.linspace(0, 30, n) + np.random.RandomState(42).randn(n) * 2
-    return pd.DataFrame({
-        "date": dates.strftime("%Y%m%d"),
-        "close": close,
-        "high": close + 1,
-        "low": close - 1,
-        "volume": np.ones(n) * 100000,
-    })
+    return pd.DataFrame(
+        {
+            "date": dates.strftime("%Y%m%d"),
+            "close": close,
+            "high": close + 1,
+            "low": close - 1,
+            "volume": np.ones(n) * 100000,
+        }
+    )
 
 
 @pytest.fixture
@@ -31,13 +36,15 @@ def downtrend_data():
     n = 120
     dates = pd.date_range("2025-01-01", periods=n, freq="B")
     close = 130 - np.linspace(0, 30, n) + np.random.RandomState(42).randn(n) * 2
-    return pd.DataFrame({
-        "date": dates.strftime("%Y%m%d"),
-        "close": close,
-        "high": close + 1,
-        "low": close - 1,
-        "volume": np.ones(n) * 100000,
-    })
+    return pd.DataFrame(
+        {
+            "date": dates.strftime("%Y%m%d"),
+            "close": close,
+            "high": close + 1,
+            "low": close - 1,
+            "volume": np.ones(n) * 100000,
+        }
+    )
 
 
 @pytest.fixture
@@ -183,10 +190,12 @@ class TestKnownAnswerDeterministic:
     def _make_price_data(prices: list[float]) -> pd.DataFrame:
         """Build a minimal price DataFrame from a list of close prices."""
         n = len(prices)
-        return pd.DataFrame({
-            "date": [f"202501{d:02d}" for d in range(1, n + 1)],
-            "close": [float(p) for p in prices],
-        })
+        return pd.DataFrame(
+            {
+                "date": [f"202501{d:02d}" for d in range(1, n + 1)],
+                "close": [float(p) for p in prices],
+            }
+        )
 
     # ---- Test 1: Single buy-sell round trip --------------------------------
 
@@ -451,10 +460,12 @@ class TestProfitFactorRegression:
     def test_profit_factor_uses_sum_not_avg(self):
         """Two wins + one loss: verify profit_factor = sum/abs(sum)."""
         prices = [100, 100, 110, 100, 120, 100, 95, 100, 105, 100]
-        price_data = pd.DataFrame({
-            "date": [f"202501{d:02d}" for d in range(1, 11)],
-            "close": [float(p) for p in prices],
-        })
+        price_data = pd.DataFrame(
+            {
+                "date": [f"202501{d:02d}" for d in range(1, 11)],
+                "close": [float(p) for p in prices],
+            }
+        )
         # Three round trips: buy@100→sell@110 (win), buy@100→sell@120 (win), buy@100→sell@95 (loss)
         signals = pd.Series([0, 1, -1, 1, -1, 1, -1, 0, 0, 0])
 

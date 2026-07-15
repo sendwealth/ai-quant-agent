@@ -93,8 +93,7 @@ class RateLimiter:
                 usage_ratio = 1.0 - (self._tokens / self._max_calls)
                 if usage_ratio >= self._warning_threshold:
                     logger.warning(
-                        "Rate limit approaching for %s: %.0f/%d calls used "
-                        "(%.0f%%)",
+                        "Rate limit approaching for %s: %.0f/%d calls used (%.0f%%)",
                         id(self),
                         self._max_calls - self._tokens,
                         self._max_calls,
@@ -117,7 +116,8 @@ class RateLimiter:
         wait = self.acquire(tokens)
         if wait > 0:
             logger.info(
-                "Rate limiter: waiting %.1fs before next call", wait,
+                "Rate limiter: waiting %.1fs before next call",
+                wait,
             )
             time.sleep(wait)
 

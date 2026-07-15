@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime
-from typing import TYPE_CHECKING, Any, Optional
+from datetime import date
+from typing import TYPE_CHECKING
 
 from ..strategy.strategy import ConsensusStrategy, StrategyContext
-from .base import BaseAgent, AgentResult
+from .base import AgentResult, BaseAgent
 
 if TYPE_CHECKING:
     from ..config import Settings
@@ -99,30 +99,42 @@ class RiskAgent(BaseAgent):
         take_profit_2: float | None = None,
         max_portfolio_risk: float | None = None,
         max_daily_loss_pct: float | None = None,
-        settings: Optional["Settings"] = None,
-        llm_client: Optional["LLMClient"] = None,
+        settings: Settings | None = None,
+        llm_client: LLMClient | None = None,
         strategy=None,
         **kwargs,
     ):
         super().__init__(name="risk", **kwargs)
-        self.max_position = max_position if max_position is not None else (
-            settings.max_position_pct if settings else 0.20
+        self.max_position = (
+            max_position
+            if max_position is not None
+            else (settings.max_position_pct if settings else 0.20)
         )
-        self.stop_loss = stop_loss if stop_loss is not None else (
-            settings.default_stop_loss if settings else -0.08
+        self.stop_loss = (
+            stop_loss
+            if stop_loss is not None
+            else (settings.default_stop_loss if settings else -0.08)
         )
-        self.take_profit_1 = take_profit_1 if take_profit_1 is not None else (
-            settings.default_take_profit_1 if settings else 0.10
+        self.take_profit_1 = (
+            take_profit_1
+            if take_profit_1 is not None
+            else (settings.default_take_profit_1 if settings else 0.10)
         )
-        self.take_profit_2 = take_profit_2 if take_profit_2 is not None else (
-            settings.default_take_profit_2 if settings else 0.20
+        self.take_profit_2 = (
+            take_profit_2
+            if take_profit_2 is not None
+            else (settings.default_take_profit_2 if settings else 0.20)
         )
-        self.max_portfolio_risk = max_portfolio_risk if max_portfolio_risk is not None else (
-            settings.max_portfolio_risk if settings else 0.80
+        self.max_portfolio_risk = (
+            max_portfolio_risk
+            if max_portfolio_risk is not None
+            else (settings.max_portfolio_risk if settings else 0.80)
         )
-        self.max_daily_loss_pct = float(max_daily_loss_pct if max_daily_loss_pct is not None else (
-            settings.max_daily_loss_pct if settings else -0.03
-        ))
+        self.max_daily_loss_pct = float(
+            max_daily_loss_pct
+            if max_daily_loss_pct is not None
+            else (settings.max_daily_loss_pct if settings else -0.03)
+        )
         self._llm = llm_client
         # 策略层：共识 → 信号 + 仓位（默认 ConsensusStrategy，与原逻辑等价）
         self.strategy = strategy or ConsensusStrategy(
@@ -159,8 +171,10 @@ class RiskAgent(BaseAgent):
 
         if not results:
             return AgentResult(
-                agent_name=self.name, stock_code=stock_code,
-                signal="HOLD", confidence=0.0,
+                agent_name=self.name,
+                stock_code=stock_code,
+                signal="HOLD",
+                confidence=0.0,
                 reasoning="无分析师信号",
                 success=False,
             )
@@ -169,19 +183,23 @@ class RiskAgent(BaseAgent):
         successful = [r for r in results if r.success]
         if not successful:
             return AgentResult(
-                agent_name=self.name, stock_code=stock_code,
-                signal="HOLD", confidence=0.0,
+                agent_name=self.name,
+                stock_code=stock_code,
+                signal="HOLD",
+                confidence=0.0,
                 reasoning="所有分析师失败",
                 success=False,
             )
 
         # 2~3. 策略层：共识信号 + 建议仓位（委托给可插拔 Strategy）
-        base = self.strategy.generate_signal(StrategyContext(
-            results=results,
-            current_positions=current_positions,
-            current_equity=current_equity,
-            current_date=current_date,
-        ))
+        base = self.strategy.generate_signal(
+            StrategyContext(
+                results=results,
+                current_positions=current_positions,
+                current_equity=current_equity,
+                current_date=current_date,
+            )
+        )
         consensus = base.signal
         avg_confidence = base.confidence
         position = base.position_pct
