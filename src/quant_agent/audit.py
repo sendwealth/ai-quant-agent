@@ -15,7 +15,10 @@ import json
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .execution.orders import Order
 
 
 class AuditLogger:
@@ -71,6 +74,39 @@ class AuditLogger:
 
         line = json.dumps(entry, ensure_ascii=False, default=str) + "\n"
 
+        filepath = self._current_filepath()
+        with self._lock:
+            with open(filepath, "a", encoding="utf-8") as fh:
+                fh.write(line)
+
+    def log_order_event(self, order: Order, event: str, extra: dict | None = None) -> None:
+        """把一笔订单的状态流转写入结构化审计流（P2.5）。
+
+        每行一个 JSON 对象，字段与 :class:`quant_agent.execution.orders.Order`
+        对齐，便于后续按 order_id / stock_code / status 检索与统计。
+        """
+        entry: dict[str, Any] = {
+            "timestamp": datetime.now().isoformat(),
+            "event_type": "order_event",
+            "event": event,
+            "order_id": order.order_id,
+            "idempotency_key": order.idempotency_key,
+            "stock_code": order.stock_code,
+            "side": order.side.value,
+            "quantity": order.quantity,
+            "price": order.price,
+            "status": order.status.value,
+            "rejection_reason": order.rejection_reason.value
+            if order.rejection_reason
+            else None,
+            "rejection_detail": order.rejection_detail,
+            "trading_day": order.trading_day,
+            "filled_price": order.filled_price,
+            "commission": order.commission,
+        }
+        if extra:
+            entry["extra"] = extra
+        line = json.dumps(entry, ensure_ascii=False, default=str) + "\n"
         filepath = self._current_filepath()
         with self._lock:
             with open(filepath, "a", encoding="utf-8") as fh:

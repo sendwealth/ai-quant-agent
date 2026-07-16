@@ -33,6 +33,19 @@
   默认 `research`；`live` 在本开源版本未实现，设置后启动失败（fail-safe）。
 - **P4 Web 加固**：`run_web` 非 loopback 绑定打印安全告警，启用端口复用。
 
+### 发布治理与运营（P4 收尾）
+- **P4.1 分支保护 / DCO**：`CONTRIBUTING.md` 明确主分支保护规则（CI 全绿、≥1 审查、
+  禁直推、DCO 签署）；`.github/PULL_REQUEST_TEMPLATE.md` 增加安全自查清单。
+- **P4.2 发布流程**：新增 `.github/workflows/release.yml`——tag 触发，先 TestPyPI
+  验证安装再发 PyPI，生成 `SHA256SUMS` 与 release notes；`make release-verify`
+  固化发布前兼容性与许可证自检。
+- **P4.3 版本兼容**：新增 `quant_agent/compat` 模块与 `uv run python -m quant_agent.compat`
+  CLI，校验 Python ≥3.10 与关键依赖版本区间。
+- **P4.4 许可证清单**：新增 `scripts/license_check.py`，列出运行时依赖许可证并标记
+  需复核的 copyleft / 商业许可，CI 可用于阻断。
+- **P4.5 季度审查**：新增 `docs/quarterly-review.md` 模板（依赖/数据源/许可证/路线图/
+  安全基线），书面记录主分支保护规则。
+
 ## [3.1.0] - 2026-04-11
 - 多 Agent 协作架构（基本面 / 技术 / 情感 / 规划 / 风控 / 执行）。
 - LLM 增强：情感分析、指令解析、报告生成、风险解读（OpenAI / 智谱双 provider）。

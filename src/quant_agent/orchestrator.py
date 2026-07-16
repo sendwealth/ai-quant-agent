@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from .agents.base import AgentResult
+from .agents.base import AgentResult, BaseAgent
 from .agents.execution import ExecutionAgent
 from .agents.fundamental import FundamentalAgent
 from .agents.planner import ExecutionPlan, PlannerAgent
@@ -45,6 +45,21 @@ class AnalysisReport:
     # 数据谱系 (P3)：本次分析所依赖数据的来源与时间记录
     data_lineage: list = field(default_factory=list)
 
+    def lineage_warnings(self) -> list[str]:
+        """汇总数据谱系中的显著警示（样例/缓存/合并/缺失/降级）。
+
+        用于报告顶部显著提示，确保「用了什么数据、可信度如何」对用户透明。
+        """
+        warnings: list[str] = []
+        seen: set[str] = set()
+        for prov in self.data_lineage:
+            reasons = prov.warning_reasons() if hasattr(prov, "warning_reasons") else []
+            for reason in reasons:
+                if reason not in seen:
+                    seen.add(reason)
+                    warnings.append(reason)
+        return warnings
+
     def to_dict(self) -> dict:
         lineage = [p.to_dict() for p in self.data_lineage] if self.data_lineage else []
         return {
@@ -64,6 +79,7 @@ class AnalysisReport:
             "risk_interpretation": self.risk_interpretation,
             "summary": self.summary,
             "data_lineage": lineage,
+            "lineage_warnings": self.lineage_warnings(),
         }
 
 
@@ -100,11 +116,7 @@ class Orchestrator:
         self.audit_logger = AuditLogger(log_dir=audit_dir)
 
         # LLM 客户端 (软降级 — 无 API key 时进入离线规则增强模式，功能不中断)
-        self.llm: LLMClient | None = None
-        try:
-            self.llm = get_llm_client_soft()
-        except LLMError as e:
-            logger.info("LLM 初始化失败，进入离线模式: %s", e)
+        self.llm: LLMClient = get_llm_client_soft()
 
         # 初始化 Agent 团队
         self.fundamental = FundamentalAgent(data_service=self.data)
@@ -157,7 +169,7 @@ class Orchestrator:
         return self._screener
 
     @staticmethod
-    def _run_agent(name: str, agent, stock_code: str) -> AgentResult:
+    def _run_agent(name: str, agent: BaseAgent, stock_code: str) -> AgentResult:
         """Run a single agent, catching exceptions and returning AgentResult."""
         try:
             return agent.analyze(stock_code)

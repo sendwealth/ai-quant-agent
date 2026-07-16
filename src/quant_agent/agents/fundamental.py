@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from ..data.sources.base import FinancialSnapshot
 from ..thresholds import _Thresh, get_thresholds
-from .base import AgentResult, BaseAgent
+from .base import AgentResult, BaseAgent, Signal
 
 
 class FundamentalAgent(BaseAgent):
@@ -80,7 +80,7 @@ class FundamentalAgent(BaseAgent):
         if self.data_service is None:
             self._logger.warning("未配置 DataService")
             return None
-        return self.data_service.get_financial_snapshot(stock_code)
+        return cast("FinancialSnapshot | None", self.data_service.get_financial_snapshot(stock_code))
 
     def _calc_scores(self, s: FinancialSnapshot) -> dict[str, Any]:
         """计算各项评分"""
@@ -189,7 +189,7 @@ class FundamentalAgent(BaseAgent):
             "growth": min(g_max, max(g_min, growth)),
         }
 
-    def _generate_signal(self, s: FinancialSnapshot, scores: dict) -> tuple[str, float, str]:
+    def _generate_signal(self, s: FinancialSnapshot, scores: dict) -> tuple[Signal, float, str]:
         """生成信号"""
         t = self._thresh.signal
         total_score = sum(scores.values()) / len(scores)

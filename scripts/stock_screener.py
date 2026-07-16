@@ -1,15 +1,16 @@
 """智能选股 — 多维度评分筛选（Tushare daily）"""
 
-import os
 import logging
-from dotenv import load_dotenv
-load_dotenv()
-
-import pandas as pd
-import numpy as np
+import os
 from datetime import datetime, timedelta
 
-from quant_agent.strategy.indicators import rsi, macd, ema, adx
+import numpy as np
+import pandas as pd
+from dotenv import load_dotenv
+
+from quant_agent.strategy.indicators import adx, ema, macd, rsi
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 logger = logging.getLogger(__name__)
@@ -54,7 +55,7 @@ def get_daily(code: str) -> pd.DataFrame | None:
         for c in ["close", "high", "low", "vol", "amount"]:
             df[c] = df[c].astype(float)
         return df
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -135,7 +136,8 @@ def main():
 
     df = pd.DataFrame(results)
     if df.empty:
-        print("无结果"); return
+        print("无结果")
+        return
     df = df.sort_values("score", ascending=False).head(20).reset_index(drop=True)
 
     print(f"\n{'='*90}")

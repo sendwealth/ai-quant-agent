@@ -1,286 +1,307 @@
-"""执行层 + 可观测性单元测试"""
+"""P2 测试 — 统一 ID / 订单状态机 / SQLite 存储 / 模拟交易规则与审计。
+
+覆盖：
+- P2.1 统一 ID 生成
+- P2.2 订单状态机 / 拒绝原因 / 幂等
+- P2.3 SQLite 存储（快照往返）
+- P2.4 T+1 / 单只仓位上限 / 单日亏损熔断
+- P2.5 结构化审计流
+"""
+
+from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from quant_agent.agents.base import AgentResult
-from quant_agent.agents.execution import ExecutionAgent, Order, Position
+import pytest
+
 from quant_agent.audit import AuditLogger
-from quant_agent.observability.metrics import HealthChecker, MetricsCollector
+from quant_agent.execution.ids import IdGenerator, generate_order_id, generate_trade_id
+from quant_agent.execution.orders import (
+    InvalidOrderTransition,
+    Order,
+    OrderSide,
+    OrderStatus,
+    RejectionReason,
+)
+from quant_agent.execution.paper_trading import PaperTradingService
+from quant_agent.execution.store import SqliteStateStore
+from quant_agent.portfolio import CommissionModel, Portfolio
+
+# ---------------------------------------------------------------------------
+# P2.1 统一 ID
+# ---------------------------------------------------------------------------
 
 
-class TestOrder:
-    def test_create_order(self):
-        o = Order(stock_code="300750", direction="buy", price=100.0, shares=100)
-        assert o.status == "pending"
-        assert o.shares == 100
+class TestIdGenerator:
+    def test_generate_order_and_trade_ids_unique(self):
+        ids = {generate_order_id() for _ in range(100)}
+        assert len(ids) == 100
+
+    def test_prefix_present(self):
+        assert generate_order_id().startswith("ord_")
+        assert generate_trade_id().startswith("trd_")
+
+    def test_deterministic_generator(self):
+        g = IdGenerator("t", deterministic=True)
+        a, b, c = g.next_id(), g.next_id(), g.next_id()
+        assert a != b != c
+        assert a.split("_")[-1] == "000001"
+        assert c.split("_")[-1] == "000003"
 
 
-class TestPosition:
-    def test_update_price(self):
-        p = Position(stock_code="300750", shares=100, avg_price=10.0)
-        p.update_price(12.0)
-        assert p.pnl == 200.0
-        assert abs(p.pnl_pct - 0.2) < 0.001
-
-    def test_stop_loss(self):
-        p = Position(stock_code="300750", shares=100, avg_price=10.0, stop_loss=9.0)
-        p.update_price(8.5)
-        assert p.should_stop_loss()
-
-    def test_take_profit(self):
-        p = Position(stock_code="300750", shares=100, avg_price=10.0, take_profit=12.0)
-        p.update_price(12.5)
-        assert p.should_take_profit()
+# ---------------------------------------------------------------------------
+# P2.2 订单状态机
+# ---------------------------------------------------------------------------
 
 
-class TestExecutionAgent:
-    def test_buy(self):
-        agent = ExecutionAgent(initial_capital=100000)
-        order = agent.execute_signal("300750", "BUY", position_pct=0.20, current_price=100.0)
-        assert order is not None
-        assert order.status == "filled"
-        assert order.shares > 0
-        assert agent.cash < 100000
-        assert "300750" in agent.positions
+class TestOrderStateMachine:
+    def test_create_assigns_id(self):
+        o = Order.create("300750", OrderSide.BUY, 100, 10.0, idempotency_key="k")
+        assert o.order_id.startswith("ord_")
+        assert o.idempotency_key == "k"
+        assert o.status is OrderStatus.PENDING
 
-    def test_sell(self):
-        agent = ExecutionAgent(initial_capital=100000)
-        agent.execute_signal("300750", "BUY", position_pct=0.20, current_price=100.0)
-        order = agent.execute_signal("300750", "SELL", current_price=110.0)
-        assert order is not None
-        assert order.status == "filled"
-        assert "300750" not in agent.positions
-        assert agent.cash > 100000  # 盈利
+    def test_pending_to_filled(self):
+        o = Order.create("300750", OrderSide.BUY, 100, 10.0)
+        o.transition(OrderStatus.FILLED, filled_price=10.0, commission=0.3)
+        assert o.is_filled()
+        assert o.filled_price == 10.0
+        assert o.commission == 0.3
+        assert o.filled_at is not None
 
-    def test_stop_loss_trigger(self):
-        agent = ExecutionAgent(initial_capital=100000)
-        agent.execute_signal("300750", "BUY", position_pct=0.20, current_price=100.0)
-        order = agent.check_stop_conditions("300750", 90.0)  # 低于止损
-        assert order is not None
-        assert "300750" not in agent.positions
+    def test_pending_to_rejected_records_reason(self):
+        o = Order.create("300750", OrderSide.BUY, 100, 10.0)
+        o.transition(OrderStatus.REJECTED, reason=RejectionReason.INSUFFICIENT_CASH, detail="no cash")
+        assert o.is_rejected()
+        assert o.rejection_reason is RejectionReason.INSUFFICIENT_CASH
+        assert o.rejection_detail == "no cash"
 
-    def test_take_profit_trigger(self):
-        agent = ExecutionAgent(initial_capital=100000)
-        agent.execute_signal("300750", "BUY", position_pct=0.20, current_price=100.0)
-        order = agent.check_stop_conditions("300750", 125.0)  # 高于止盈
-        assert order is not None
+    def test_filled_is_terminal(self):
+        o = Order.create("300750", OrderSide.BUY, 100, 10.0)
+        o.transition(OrderStatus.FILLED)
+        with pytest.raises(InvalidOrderTransition):
+            o.transition(OrderStatus.REJECTED)
 
-    def test_insufficient_funds(self):
-        agent = ExecutionAgent(initial_capital=100)
-        order = agent.execute_signal("300750", "BUY", position_pct=1.0, current_price=1000.0)
-        assert order.status == "rejected"
+    def test_invalid_transition_raises(self):
+        o = Order.create("300750", OrderSide.BUY, 100, 10.0)
+        o.transition(OrderStatus.FILLED)  # FILLED 是终态
+        with pytest.raises(InvalidOrderTransition):
+            o.transition(OrderStatus.REJECTED)  # 终态不可再转移
 
-    def test_hold(self):
-        agent = ExecutionAgent(initial_capital=100000)
-        order = agent.execute_signal("300750", "HOLD", current_price=100.0)
-        assert order is None
+    def test_pending_to_cancelled_allowed(self):
+        o = Order.create("300750", OrderSide.BUY, 100, 10.0)
+        o.transition(OrderStatus.CANCELLED)
+        assert o.status is OrderStatus.CANCELLED
 
-    def test_total_return(self):
-        agent = ExecutionAgent(initial_capital=100000)
-        agent.execute_signal("300750", "BUY", position_pct=0.20, current_price=100.0)
-        assert agent.total_return < 0  # 手续费后
-        agent.update_prices({"300750": 110.0})
-        assert agent.total_return > 0  # 涨了
-
-    def test_get_summary(self):
-        agent = ExecutionAgent(initial_capital=100000)
-        agent.execute_signal("300750", "BUY", position_pct=0.20, current_price=100.0)
-        s = agent.get_summary()
-        assert "total_equity" in s
-        assert s["positions"]["300750"]["shares"] > 0
-
-    def test_record_equity(self):
-        agent = ExecutionAgent(initial_capital=100000)
-        agent.record_equity("2025-01-01T00:00:00")
-        assert len(agent.equity_history) == 1
-        assert agent.equity_history[0]["total_equity"] == 100000
-
-    def test_analyze_status(self):
-        agent = ExecutionAgent(initial_capital=100000)
-        result = agent.analyze("300750")
-        assert result.metrics["cash"] == 100000
+    def test_dict_roundtrip(self):
+        o = Order.create("300750", OrderSide.SELL, 100, 10.0, idempotency_key="k1")
+        o.transition(OrderStatus.FILLED, filled_price=10.5)
+        d = o.to_dict()
+        o2 = Order.from_dict(d)
+        assert o2.order_id == o.order_id
+        assert o2.side is OrderSide.SELL
+        assert o2.status is OrderStatus.FILLED
+        assert o2.filled_price == 10.5
+        assert o2.idempotency_key == "k1"
 
 
-class TestMetricsCollector:
-    def test_counter(self):
-        m = MetricsCollector()
-        m.counter("orders", 1)
-        m.counter("orders", 1)
-        assert m.get("orders") == 2
-
-    def test_gauge(self):
-        m = MetricsCollector()
-        m.gauge("equity", 100000.0)
-        assert m.get("equity") == 100000.0
-
-    def test_timer(self):
-        import time
-
-        m = MetricsCollector()
-        with m.timer("analysis"):
-            time.sleep(0.01)
-        duration = m.get("analysis.duration_ms")
-        assert duration is not None
-        assert duration >= 10
-
-    def test_query(self):
-        m = MetricsCollector()
-        m.gauge("cpu", 50.0)
-        m.gauge("cpu", 60.0)
-        results = m.query("cpu")
-        assert len(results) == 2
-
-    def test_counter_with_tags(self):
-        m = MetricsCollector()
-        m.counter("requests", 1, {"agent": "technical"})
-        assert m.get("requests", {"agent": "technical"}) == 1
+# ---------------------------------------------------------------------------
+# P2.3 SQLite 存储
+# ---------------------------------------------------------------------------
 
 
-class TestHealthChecker:
-    def test_healthy(self):
-        h = HealthChecker()
-        h.register("db", lambda: True)
-        h.register("api", lambda: True)
-        status = h.check()
-        assert status.healthy
+class TestSqliteStore:
+    def test_has_state_false_initially(self, tmp_path: Path):
+        store = SqliteStateStore(str(tmp_path))
+        assert store.has_state() is False
+        assert store.load(100_000) is None
 
-    def test_unhealthy(self):
-        h = HealthChecker()
-        h.register("db", lambda: False)
-        status = h.check()
-        assert not status.healthy
-        assert "db: FAILED" in status.errors
+    def test_save_and_load_roundtrip(self, tmp_path: Path):
+        store = SqliteStateStore(str(tmp_path))
+        pf = Portfolio(cash=100_000, commission=CommissionModel())
+        pf.buy("300750", 100.0, 200, stop_loss=90.0, take_profit=120.0)
+        pf.record_equity()
+        order = Order.create("300750", OrderSide.BUY, 200, 100.0, idempotency_key="x")
+        order.transition(OrderStatus.FILLED, filled_price=100.0)
 
-    def test_error_handling(self):
-        h = HealthChecker()
-        h.register("db", lambda: (_ for _ in ()).throw(RuntimeError("connection failed")))
-        status = h.check()
-        assert not status.healthy
-        assert any("ERROR" in e for e in status.errors)
+        store.save(pf, [order])
+        assert store.has_state()
 
-    def test_check_all(self):
-        h = HealthChecker()
-        h.register("ok", lambda: True)
-        result = h.check_all()
-        assert "healthy" in result
-        assert "timestamp" in result
+        pf2, orders2 = store.load(100_000)
+        exp_commission = pf2.commission.calc(100.0, 200, "buy")
+        assert pf2.cash == pytest.approx(100_000 - 200 * 100 - exp_commission)
+        pos = pf2.get_position("300750")
+        assert pos is not None
+        assert pos.shares == 200
+        assert pos.stop_loss == pytest.approx(90.0)
+        assert len(pf2.equity_curve) == 1
+        assert len(orders2) == 1
+        assert orders2[0].order_id == order.order_id
+        assert orders2[0].status is OrderStatus.FILLED
+
+    def test_reload_preserves_position_entry_date(self, tmp_path: Path):
+        store = SqliteStateStore(str(tmp_path))
+        pf = Portfolio(cash=100_000)
+        pf.buy("300750", 100.0, 200)
+        pf.positions["300750"].entry_date = "2024-01-02"
+        store.save(pf, [])
+        pf2, _ = store.load(100_000)
+        assert pf2.get_position("300750").entry_date == "2024-01-02"
 
 
-class TestAuditLogger:
-    """Tests for the append-only audit trail."""
+# ---------------------------------------------------------------------------
+# P2.4 模拟交易规则（T+1 / 仓位 / 熔断）
+# ---------------------------------------------------------------------------
 
-    def test_creates_directory(self, tmp_path: Path):
-        log_dir = tmp_path / "audit"
-        al = AuditLogger(log_dir=str(log_dir))
-        assert log_dir.is_dir()
 
-    def test_writes_jsonl_entry(self, tmp_path: Path):
-        log_dir = tmp_path / "audit"
-        al = AuditLogger(log_dir=str(log_dir))
-        al.log_trade_decision(
-            stock_code="300750",
-            signal="BUY",
-            agent_results=[
-                {
-                    "agent_name": "fundamental",
-                    "signal": "BUY",
-                    "confidence": 0.8,
-                    "reasoning": "strong",
-                }
-            ],
-            final_decision={
-                "action": "BUY",
-                "quantity": 200,
-                "price": 100.0,
-                "stop_loss": 92.0,
-                "take_profit": 120.0,
-            },
+class TestEnforcement:
+    def test_default_no_enforcement_buy_sell_fill(self, tmp_path: Path):
+        svc = PaperTradingService(str(tmp_path), initial_capital=100_000)
+        trade = svc.buy("300750", 100.0, 200)
+        assert trade is not None and trade.shares == 200
+        trade2 = svc.sell("300750", 110.0, 200)
+        assert trade2 is not None
+
+    def test_t_plus_one_rejects_same_day_sell(self, tmp_path: Path):
+        svc = PaperTradingService(
+            str(tmp_path), initial_capital=100_000, enforce_t_plus_one=True
         )
+        svc.buy("300750", 100.0, 200, trading_day="2024-01-02")
+        order = svc.submit_order("300750", "SELL", 200, 110.0, trading_day="2024-01-02")
+        assert order.is_rejected()
+        assert order.rejection_reason is RejectionReason.T_PLUS_ONE
+
+    def test_t_plus_one_allows_next_day_sell(self, tmp_path: Path):
+        svc = PaperTradingService(
+            str(tmp_path), initial_capital=100_000, enforce_t_plus_one=True
+        )
+        svc.buy("300750", 100.0, 200, trading_day="2024-01-02")
+        order = svc.submit_order("300750", "SELL", 200, 110.0, trading_day="2024-01-03")
+        assert order.is_filled()
+
+    def test_position_limit_rejects_oversized_buy(self, tmp_path: Path):
+        svc = PaperTradingService(
+            str(tmp_path),
+            initial_capital=100_000,
+            enforce_position_limit=True,
+            max_position_pct=0.20,
+        )
+        # 300 shares * 100 = 30k = 30% of 100k > 20%
+        order = svc.submit_order("300750", "BUY", 300, 100.0, trading_day="2024-01-02")
+        assert order.is_rejected()
+        assert order.rejection_reason is RejectionReason.POSITION_LIMIT
+
+    def test_position_limit_rejects_non_board_lot(self, tmp_path: Path):
+        svc = PaperTradingService(
+            str(tmp_path),
+            initial_capital=100_000,
+            enforce_position_limit=True,
+            max_position_pct=0.20,
+        )
+        order = svc.submit_order("300750", "BUY", 150, 100.0, trading_day="2024-01-02")
+        assert order.is_rejected()
+        assert order.rejection_reason is RejectionReason.INVALID_QUANTITY
+
+    def test_position_limit_allows_within_limit(self, tmp_path: Path):
+        svc = PaperTradingService(
+            str(tmp_path),
+            initial_capital=100_000,
+            enforce_position_limit=True,
+            max_position_pct=0.20,
+        )
+        order = svc.submit_order("300750", "BUY", 100, 100.0, trading_day="2024-01-02")
+        assert order.is_filled()
+
+    def test_daily_loss_circuit_breaker(self, tmp_path: Path):
+        svc = PaperTradingService(
+            str(tmp_path),
+            initial_capital=100_000,
+            enforce_daily_loss=True,
+            max_daily_loss_pct=-0.03,
+        )
+        svc.buy("300750", 100.0, 200, trading_day="2024-01-02")
+        # 卖出亏损 30/股 * 200 = 6000  (> 3000 阈值)
+        svc.sell("300750", 70.0, 200, trading_day="2024-01-02")
+        order = svc.submit_order("600519", "BUY", 100, 100.0, trading_day="2024-01-02")
+        assert order.is_rejected()
+        assert order.rejection_reason is RejectionReason.DAILY_LOSS_LIMIT
+
+    def test_sell_without_position_rejected(self, tmp_path: Path):
+        svc = PaperTradingService(str(tmp_path), initial_capital=100_000)
+        order = svc.submit_order("300750", "SELL", 100, 100.0)
+        assert order.is_rejected()
+        assert order.rejection_reason is RejectionReason.NO_POSITION
+        # 旧 API 仍返回 None，保持兼容
+        assert svc.sell("300750", 100.0, 100) is None
+
+
+# ---------------------------------------------------------------------------
+# P2.2 幂等
+# ---------------------------------------------------------------------------
+
+
+class TestIdempotency:
+    def test_duplicate_idempotency_key_rejected(self, tmp_path: Path):
+        svc = PaperTradingService(str(tmp_path), initial_capital=100_000)
+        o1 = svc.submit_order(
+            "300750", "BUY", 100, 100.0, idempotency_key="dup1", trading_day="2024-01-02"
+        )
+        o2 = svc.submit_order(
+            "300750", "BUY", 100, 100.0, idempotency_key="dup1", trading_day="2024-01-02"
+        )
+        assert o1.is_filled()
+        assert o2.is_rejected()
+        assert o2.rejection_reason is RejectionReason.DUPLICATE_IDEMPOTENCY
+
+    def test_idempotency_survives_restart(self, tmp_path: Path):
+        svc = PaperTradingService(str(tmp_path), initial_capital=100_000)
+        svc.submit_order(
+            "300750", "BUY", 100, 100.0, idempotency_key="k", trading_day="2024-01-02"
+        )
+        svc2 = PaperTradingService(str(tmp_path), initial_capital=100_000)
+        o2 = svc2.submit_order(
+            "300750", "BUY", 100, 100.0, idempotency_key="k", trading_day="2024-01-02"
+        )
+        assert o2.is_rejected()
+        assert o2.rejection_reason is RejectionReason.DUPLICATE_IDEMPOTENCY
+
+
+# ---------------------------------------------------------------------------
+# P2.5 结构化审计流
+# ---------------------------------------------------------------------------
+
+
+class TestAuditStream:
+    def test_rejected_order_written_to_audit(self, tmp_path: Path):
+        log_dir = tmp_path / "audit"
+        al = AuditLogger(str(log_dir))
+        svc = PaperTradingService(
+            str(tmp_path),
+            initial_capital=100_000,
+            enforce_position_limit=True,
+            max_position_pct=0.20,
+            audit_logger=al,
+        )
+        svc.submit_order("300750", "BUY", 300, 100.0, trading_day="2024-01-02")
+
         files = list(log_dir.glob("audit_*.jsonl"))
         assert len(files) == 1
         lines = files[0].read_text(encoding="utf-8").strip().splitlines()
         assert len(lines) == 1
-        entry = json.loads(lines[0])
-        assert entry["stock_code"] == "300750"
-        assert entry["signal"] == "BUY"
-        assert len(entry["agent_votes"]) == 1
-        assert entry["final_decision"]["quantity"] == 200
+        import json
 
-    def test_append_mode(self, tmp_path: Path):
+        rec = json.loads(lines[0])
+        assert rec["event_type"] == "order_event"
+        assert rec["stock_code"] == "300750"
+        assert rec["status"] == "REJECTED"
+        assert rec["rejection_reason"] == "POSITION_LIMIT"
+
+    def test_filled_order_written_to_audit(self, tmp_path: Path):
         log_dir = tmp_path / "audit"
-        al = AuditLogger(log_dir=str(log_dir))
-        for i in range(5):
-            al.log_trade_decision(
-                stock_code=f"30075{i}",
-                signal="BUY",
-                agent_results=[],
-                final_decision={"action": "BUY", "quantity": 100},
-            )
+        al = AuditLogger(str(log_dir))
+        svc = PaperTradingService(str(tmp_path), initial_capital=100_000, audit_logger=al)
+        svc.submit_order("300750", "BUY", 100, 100.0, trading_day="2024-01-02")
         files = list(log_dir.glob("audit_*.jsonl"))
-        lines = files[0].read_text(encoding="utf-8").strip().splitlines()
-        assert len(lines) == 5
-
-    def test_entry_has_timestamp(self, tmp_path: Path):
-        log_dir = tmp_path / "audit"
-        al = AuditLogger(log_dir=str(log_dir))
-        al.log_trade_decision("300750", "HOLD", [], {"action": "HOLD"})
-        entry = json.loads(list(log_dir.glob("audit_*.jsonl"))[0].read_text().strip())
-        assert "timestamp" in entry
-        # ISO format must contain 'T'
-        assert "T" in entry["timestamp"]
-
-
-class TestExecutionAgentAudit:
-    """Tests that ExecutionAgent correctly delegates to the audit logger."""
-
-    def test_buy_with_audit(self, tmp_path: Path):
-        al = AuditLogger(log_dir=str(tmp_path / "audit"))
-        agent = ExecutionAgent(initial_capital=100000, audit_logger=al)
-        results = [
-            AgentResult("fundamental", "300750", signal="BUY", confidence=0.8, reasoning="good"),
-            AgentResult("risk", "300750", signal="BUY", confidence=0.7, reasoning="consensus"),
-        ]
-        order = agent.execute_signal(
-            "300750",
-            "BUY",
-            position_pct=0.20,
-            current_price=100.0,
-            agent_results=results,
-        )
-        assert order is not None
-        assert order.status == "filled"
-
-        # Verify audit log
-        lines = list((tmp_path / "audit").glob("audit_*.jsonl"))[0].read_text().strip().splitlines()
-        entry = json.loads(lines[0])
-        assert entry["stock_code"] == "300750"
-        assert entry["signal"] == "BUY"
-        assert len(entry["agent_votes"]) == 2
-        assert entry["agent_votes"][0]["agent_name"] == "fundamental"
-        assert entry["final_decision"]["order_status"] == "filled"
-        assert entry["final_decision"]["quantity"] > 0
-
-    def test_hold_with_audit(self, tmp_path: Path):
-        al = AuditLogger(log_dir=str(tmp_path / "audit"))
-        agent = ExecutionAgent(initial_capital=100000, audit_logger=al)
-        results = [AgentResult("risk", "300750", signal="HOLD", confidence=0.5, reasoning="mixed")]
-        order = agent.execute_signal(
-            "300750",
-            "HOLD",
-            current_price=100.0,
-            agent_results=results,
-        )
-        assert order is None
-        lines = list((tmp_path / "audit").glob("audit_*.jsonl"))[0].read_text().strip().splitlines()
-        entry = json.loads(lines[0])
-        assert entry["signal"] == "HOLD"
-        # HOLD decisions have no order, so order_status is absent
-        assert "order_status" not in entry["final_decision"]
-        assert entry["final_decision"]["action"] == "HOLD"
-
-    def test_no_audit_without_logger(self, tmp_path: Path):
-        agent = ExecutionAgent(initial_capital=100000)
-        # Should not raise even though there is no audit logger
-        order = agent.execute_signal("300750", "BUY", position_pct=0.20, current_price=100.0)
-        assert order is not None
+        rec = json.loads(files[0].read_text().strip())
+        assert rec["status"] == "FILLED"

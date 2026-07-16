@@ -305,6 +305,13 @@ def render_markdown_from_dict(data: dict) -> str:
         f"- 信心度: {data.get('confidence')}",
         f"- 建议仓位: {data.get('position_pct')}",
     ]
+    # 数据谱系警示 (P1.2)
+    warnings = data.get("lineage_warnings") or []
+    if warnings:
+        lines.append("")
+        lines.append("> ⚠️ **数据谱系警示 (Data Lineage Warnings)**")
+        for w in warnings:
+            lines.append(f"> - {w}")
     if data.get("llm_analysis"):
         lines.append("\n## LLM 报告\n" + str(data.get("llm_analysis")))
     return "\n".join(lines)

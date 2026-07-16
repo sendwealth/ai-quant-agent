@@ -1,12 +1,12 @@
 """完整回测演示 — 使用模拟数据"""
 
-import numpy as np
-import pandas as pd
 import logging
 
+import numpy as np
+import pandas as pd
+
 from quant_agent.backtest.engine import BacktestEngine, CommissionModel, SlippageModel
-from quant_agent.strategy.indicators import rsi, macd, ema, bollinger_bands
-from quant_agent.observability.metrics import MetricsCollector
+from quant_agent.strategy.indicators import bollinger_bands, ema, rsi
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 logger = logging.getLogger(__name__)
@@ -104,7 +104,7 @@ def run_backtest(
 
     # 输出结果
     print("\n" + "=" * 60)
-    print(f"🦞 AI Quant Agent v3.0 — 回测报告")
+    print("🦞 AI Quant Agent v3.0 — 回测报告")
     print("=" * 60)
     print(f"  股票: {stock_code}")
     print(f"  策略: {strategy}")

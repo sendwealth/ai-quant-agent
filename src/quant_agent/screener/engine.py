@@ -442,7 +442,7 @@ class ScreeningEngine:
         tech = score_technical(df, scoring_thresh.technical)
         mom = score_momentum(df, scoring_thresh.momentum)
         liq = score_liquidity(df, scoring_thresh.liquidity)
-        fun = (
+        fun: dict[str, Any] = (
             score_fundamental(snapshot, scoring_thresh.fundamental)
             if snapshot
             else {

@@ -58,7 +58,7 @@ class TushareSource(DataSource):
         rate_limiter: RateLimiter | None = None,
     ):
         self._token = token
-        self._pro = None
+        self._pro: Any = None
         self._rate_limiter = rate_limiter or RateLimiter(
             max_calls=200,
             period=60.0,
@@ -234,10 +234,14 @@ class TushareSource(DataSource):
                 prev_profit = self._safe_float(income.iloc[1].get("net_profit"))
 
                 data["revenue_growth"] = (
-                    (latest_rev - prev_rev) / prev_rev if prev_rev > 0 else None
+                    (latest_rev - prev_rev) / prev_rev
+                    if latest_rev is not None and prev_rev is not None and prev_rev > 0
+                    else None
                 )
                 data["profit_growth"] = (
-                    (latest_profit - prev_profit) / prev_profit if prev_profit > 0 else None
+                    (latest_profit - prev_profit) / prev_profit
+                    if latest_profit is not None and prev_profit is not None and prev_profit > 0
+                    else None
                 )
             else:
                 data["revenue_growth"] = None
@@ -258,7 +262,11 @@ class TushareSource(DataSource):
                     else total_equity
                 )
                 avg_equity = (
-                    (total_equity + prev_equity) / 2 if (total_equity + prev_equity) > 0 else None
+                    (total_equity + prev_equity) / 2
+                    if total_equity is not None
+                    and prev_equity is not None
+                    and (total_equity + prev_equity) > 0
+                    else None
                 )
 
                 if net_profit and avg_equity and avg_equity > 0:

@@ -12,10 +12,10 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import date
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from ..strategy.strategy import ConsensusStrategy, StrategyContext
-from .base import AgentResult, BaseAgent
+from .base import AgentResult, BaseAgent, Signal
 
 if TYPE_CHECKING:
     from ..config import Settings
@@ -200,7 +200,7 @@ class RiskAgent(BaseAgent):
                 current_date=current_date,
             )
         )
-        consensus = base.signal
+        consensus: Signal = cast("Signal", base.signal)
         avg_confidence = base.confidence
         position = base.position_pct
         buy_count = base.metrics.get("buy_count", 0)

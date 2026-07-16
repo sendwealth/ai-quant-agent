@@ -131,8 +131,8 @@ if __name__ == "__main__":
                     f"{s.fundamental_score:>4.0f}"
                 )
             print("=" * 90)
-            codes = ", ".join(s.stock_code for s in top)
-            print(f"\n入选: {codes}")
+            selected_codes = ", ".join(s.stock_code for s in top)
+            print(f"\n入选: {selected_codes}")
 
             if args.screen_analyze and reports:
                 print(f"\n{'=' * 90}")

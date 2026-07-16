@@ -11,6 +11,7 @@ import pandas as pd
 
 from ..config import Settings, get_settings
 from .normalizer import normalize_price_data
+from .smoke import smoke_report, smoke_test_source
 from .sources.akshare import AkshareSource
 from .sources.baostock import BaoStockSource
 from .sources.base import DataProvenance, DataSource, FinancialSnapshot
@@ -99,6 +100,22 @@ class DataService:
     def baostock(self) -> BaoStockSource | None:
         return self._baostock if hasattr(self, "_baostock") else None
 
+    # ------------------------------------------------------------------
+    # P1.5 数据源冒烟测试
+    # ------------------------------------------------------------------
+
+    def smoke_test(self, stock_code: str = "600519", days: int = 5) -> dict[str, Any]:
+        """对所有已构建数据源跑一次最小请求，返回聚合健康报告。
+
+        见 :mod:`quant_agent.data.smoke`。仅读取、不写缓存，适合定时/
+        CI 触发；任何单源异常都不会扩散（由 :func:`smoke_test_source`
+        捕获并计入 ``failed``）。
+        """
+        results = [
+            smoke_test_source(s, stock_code=stock_code, days=days) for s in self._sources
+        ]
+        return smoke_report(results)
+
     # ── 行情数据 ──
 
     def _cache_max_age_hours(self) -> float:
@@ -113,16 +130,34 @@ class DataService:
         source: str,
         data_type: str,
         confidence: str = "high",
+        data: Any | None = None,
+        degradation_reason: str | None = None,
+        adjust_status: str | None = None,
+        trading_day: str | None = None,
+        missing_fields: list[str] | None = None,
+        cache_age_seconds: float | None = None,
     ) -> None:
-        """记录一条数据谱系（来源 + 获取时间）。"""
+        """记录一条数据谱系（来源 + 获取时间 + v2 扩展字段）。
+
+        自动为 sample / cache / merged 来源设置降级原因，并可在传入 ``data``
+        时计算数据哈希，供报告透明展示与复现校验。
+        """
         if not hasattr(self, "_lineage"):
             self._lineage = {}
+        if degradation_reason is None and source in ("sample", "cache", "merged"):
+            degradation_reason = f"{source}_fallback"
         prov = DataProvenance(
             source=source,
             identifier=stock_code,
             fetched_at=datetime.now().isoformat(timespec="seconds"),
             data_type=data_type,
             confidence=confidence,
+            degradation_reason=degradation_reason,
+            adjust_status=adjust_status,
+            trading_day=trading_day,
+            missing_fields=missing_fields,
+            cache_age_seconds=cache_age_seconds,
+            data_hash=DataProvenance.compute_hash(data) if data is not None else None,
         )
         self._lineage.setdefault(stock_code, []).append(prov)
 
@@ -148,13 +183,13 @@ class DataService:
             df = self.store.load_price(stock_code)
             if df is not None:
                 logger.info(f"Offline mode: using cached data for {stock_code}")
-                self._record_lineage(stock_code, "cache", "price")
+                self._record_lineage(stock_code, "cache", "price", data=df)
                 return normalize_price_data(df)
             try:
                 demo = self._sample.get_price_data(stock_code, days)
                 if demo is not None and not demo.empty:
                     logger.info(f"Offline mode: using sample fallback for {stock_code}")
-                    self._record_lineage(stock_code, "sample", "price", confidence="low")
+                    self._record_lineage(stock_code, "sample", "price", confidence="low", data=demo)
                     return normalize_price_data(demo)
             except Exception as e:
                 logger.warning(f"Offline sample fallback failed: {e}")
@@ -167,7 +202,7 @@ class DataService:
             df = self.store.load_price(stock_code)
             if df is not None and len(df) >= days * 0.8:
                 logger.info(f"Cache hit: {stock_code} ({len(df)} rows)")
-                self._record_lineage(stock_code, "cache", "price")
+                self._record_lineage(stock_code, "cache", "price", data=df)
                 return normalize_price_data(df)
 
         # 2. 依次尝试数据源（含数据修复）
@@ -282,9 +317,12 @@ class DataService:
                             fetched_at=datetime.now().isoformat(timespec="seconds"),
                             data_type="financial",
                             confidence="low",
+                            degradation_reason="sample_fallback",
                         )
                     )
-                    self._record_lineage(stock_code, "sample", "financial", confidence="low")
+                    self._record_lineage(
+                        stock_code, "sample", "financial", confidence="low", data=snap.to_dict()
+                    )
                     return snap
             except Exception as e:
                 logger.warning(f"Offline financial fallback failed: {e}")
@@ -358,15 +396,15 @@ class DataService:
             data = cached.iloc[0].to_dict()
             data.pop("index", None)
             report_date = data.get("report_date") or data.get("end_date")
+            cache_age_seconds: float | None = None
             if report_date is not None:
                 try:
-                    from datetime import datetime
-
                     if isinstance(report_date, str):
                         rd = datetime.strptime(report_date[:10], "%Y-%m-%d")
                     else:
                         rd = pd.Timestamp(report_date).to_pydatetime()
-                    age_days = (datetime.now() - rd).days
+                    cache_age_seconds = (datetime.now() - rd).total_seconds()
+                    age_days = int(cache_age_seconds // 86400)
                     if age_days > max_age_days:
                         logger.warning(
                             f"Cached financial data expired ({age_days}d > {max_age_days}d): "
@@ -384,9 +422,12 @@ class DataService:
                     fetched_at=datetime.now().isoformat(timespec="seconds"),
                     data_type="financial",
                     confidence="high",
+                    degradation_reason="cache_fallback",
                 )
             )
-            self._record_lineage(stock_code, "cache", "financial")
+            self._record_lineage(
+                stock_code, "cache", "financial", data=data, cache_age_seconds=cache_age_seconds
+            )
             return snap
         return None
 

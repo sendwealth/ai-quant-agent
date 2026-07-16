@@ -82,6 +82,11 @@ class Settings(BaseSettings):
     # ── 日志 ──
     log_level: str = "INFO"
 
+    # ── Web 安全 (P3.4) ──
+    # 若设置，则所有写操作（POST /api/analyze、/api/execute）需携带
+    # Authorization: Bearer <token>。未设置则不鉴权（仅建议本地/内网使用）。
+    web_auth_token: str | None = None
+
     # ── 邮件通知 ──
     email_enabled: bool = False
     email_smtp_server: str = "smtp.163.com"

@@ -9,6 +9,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 from ..orchestrator import AnalysisReport
 
@@ -85,7 +86,7 @@ def load_report(file_name: str, base_dir: str | Path = REPORTS_DIR) -> dict | No
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return cast("dict", json.loads(path.read_text(encoding="utf-8")))
     except Exception as e:
         logger.warning("加载报告失败 %s: %s", file_name, e)
         return None

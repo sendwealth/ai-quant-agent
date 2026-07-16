@@ -44,6 +44,11 @@ quant-agent = "quant_agent.cli:app"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# 内置演示样例（确定性合成数据，见 scripts/generate_demo_samples.py）随 wheel 发布，
+# 使 `pip install` 后离线兜底可用。
+[tool.setuptools.package-data]
+quant_agent = ["data/samples/**/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests/unit", "tests"]
 python_files = ["test_*.py"]

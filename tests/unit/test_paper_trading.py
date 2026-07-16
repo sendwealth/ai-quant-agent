@@ -1,6 +1,6 @@
-"""Tests for PaperTradingService -- persistent portfolio state."""
+"""Tests for PaperTradingService -- persistent portfolio state (SQLite backend)."""
 
-import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -19,10 +19,6 @@ def _svc(tmp_path: Path, initial_capital: float = 100_000.0) -> PaperTradingServ
         data_dir=str(tmp_path),
         initial_capital=initial_capital,
     )
-
-
-def _state_file(tmp_path: Path) -> Path:
-    return tmp_path / "paper_trading" / "portfolio_state.json"
 
 
 # ---------------------------------------------------------------------------
@@ -122,16 +118,23 @@ class TestStatePersistence:
 
 
 class TestAtomicWrites:
-    """State file must never be in a partial / corrupt state."""
+    """State must be persistable and reloadable from SQLite."""
 
-    def test_state_file_is_valid_json(self, tmp_path: Path):
+    def test_sqlite_db_file_created(self, tmp_path: Path):
+        svc = _svc(tmp_path)
+        svc.buy("300750", price=100.0, amount=200)
+        assert svc._store.db_path.exists()
+        assert svc._store.db_path.suffix == ".db"
+
+    def test_state_roundtrips_through_sqlite(self, tmp_path: Path):
         svc = _svc(tmp_path)
         svc.buy("300750", price=100.0, amount=200)
 
-        raw = _state_file(tmp_path).read_text(encoding="utf-8")
-        data = json.loads(raw)  # must not raise
-        assert data["cash"] == svc.portfolio.cash
-        assert len(data["positions"]) == 1
+        # Re-open and read raw from SQLite
+        svc2 = _svc(tmp_path)
+        assert svc2.portfolio.cash == pytest.approx(svc.portfolio.cash)
+        assert len(svc2.portfolio.positions) == 1
+        assert svc2.portfolio.get_position("300750").shares == 200
 
     def test_no_leftover_temp_files(self, tmp_path: Path):
         svc = _svc(tmp_path)
@@ -140,13 +143,17 @@ class TestAtomicWrites:
         tmp_files = list((tmp_path / "paper_trading").glob("*.tmp"))
         assert len(tmp_files) == 0
 
-    def test_state_file_has_version(self, tmp_path: Path):
+    def test_state_has_schema_version(self, tmp_path: Path):
         svc = _svc(tmp_path)
         svc.save_state()
 
-        data = json.loads(_state_file(tmp_path).read_text())
-        assert "version" in data
-        assert data["version"] >= 1
+        conn = sqlite3.connect(str(svc._store.db_path))
+        row = conn.execute(
+            "SELECT value FROM meta WHERE key='schema_version'"
+        ).fetchone()
+        conn.close()
+        assert row is not None
+        assert int(row[0]) >= 1
 
 
 # ---------------------------------------------------------------------------
@@ -309,13 +316,17 @@ class TestGetStateSummary:
 
 
 class TestCorruptedState:
-    """A corrupted state file should not crash the service."""
+    """A corrupted state database should not crash the service."""
 
-    def test_corrupted_json_creates_fresh_portfolio(self, tmp_path: Path):
+    def test_corrupted_db_creates_fresh_portfolio(self, tmp_path: Path):
         state_dir = tmp_path / "paper_trading"
         state_dir.mkdir(parents=True, exist_ok=True)
-        (state_dir / "portfolio_state.json").write_text("NOT VALID JSON{{{")
+        (state_dir / "paper_trading.db").write_bytes(b"NOT A VALID SQLITE FILE\x00\x01")
 
         svc = _svc(tmp_path)
         assert svc.portfolio.cash == 100_000
         assert len(svc.portfolio.positions) == 0
+        # Saving must still work after recovery
+        svc.buy("300750", price=100.0, amount=100)
+        svc2 = _svc(tmp_path)
+        assert svc2.portfolio.get_position("300750").shares == 100

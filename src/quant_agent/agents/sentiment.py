@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
@@ -166,7 +166,7 @@ class SentimentAgent(BaseAgent):
                 return result
             # DataFrame case: convert to list of dicts
             if hasattr(result, "to_dict"):
-                return result.to_dict("records")
+                return cast("list[dict[str, Any]]", result.to_dict("records"))
             return []
         except Exception as e:
             self._logger.warning("新闻获取失败: %s", e)
@@ -216,4 +216,4 @@ class SentimentAgent(BaseAgent):
                 text = text[:-3]
             text = text.strip()
 
-        return json.loads(text)
+        return cast("dict[str, Any]", json.loads(text))

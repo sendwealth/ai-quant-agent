@@ -40,34 +40,52 @@ class MetricsCollector:
         self._counters: dict[str, int] = {}
         self._gauges: dict[str, float] = {}
 
-    def counter(self, name: str, value: int = 1, tags: dict = None):
+    def counter(self, name: str, value: int = 1, tags: dict | None = None):
         """计数器"""
         key = self._key(name, tags)
         self._counters[key] = self._counters.get(key, 0) + value
         self._record(name, float(self._counters[key]), tags)
 
-    def gauge(self, name: str, value: float, tags: dict = None):
+    def gauge(self, name: str, value: float, tags: dict | None = None):
         """仪表盘"""
         key = self._key(name, tags)
         self._gauges[key] = value
         self._record(name, value, tags)
 
-    def timer(self, name: str, tags: dict = None):
+    def timer(self, name: str, tags: dict | None = None):
         """计时器上下文"""
         return _Timer(name, self, tags)
 
-    def _record(self, name: str, value: float, tags: dict = None):
+    def _record(self, name: str, value: float, tags: dict | None = None):
         self._metrics.append(Metric(name=name, value=value, tags=tags or {}))
 
-    def get(self, name: str, tags: dict = None) -> float | None:
+    def get(self, name: str, tags: dict | None = None) -> float | None:
         key = self._key(name, tags)
         return self._gauges.get(key) or (self._counters.get(key) if key in self._counters else None)
 
     def query(self, name: str) -> list[Metric]:
         return [m for m in self._metrics if m.name == name]
 
+    def to_prometheus(self) -> str:
+        """导出为 Prometheus 文本 exposition 格式。
+
+        遍历已记录指标，输出 ``# TYPE`` 与 ``name{tag="v"} value`` 行。
+        所有指标以 ``gauge`` 类型暴露（满足基本可观测需求；counter 语义
+        可由调用方在命名上区分）。
+        """
+        lines: list[str] = []
+        seen: set[str] = set()
+        for m in self._metrics:
+            prom_name = m.name.replace(".", "_").replace("-", "_")
+            tags = "".join(f',{k}="{v}"' for k, v in m.tags.items())
+            if prom_name not in seen:
+                lines.append(f"# TYPE {prom_name} gauge")
+                seen.add(prom_name)
+            lines.append(f"{prom_name}{tags} {m.value}")
+        return "\n".join(lines) + "\n"
+
     @staticmethod
-    def _key(name: str, tags: dict = None) -> str:
+    def _key(name: str, tags: dict | None = None) -> str:
         if not tags:
             return name
         tag_str = ",".join(f"{k}={v}" for k, v in sorted(tags.items()))
@@ -75,7 +93,7 @@ class MetricsCollector:
 
 
 class _Timer:
-    def __init__(self, name: str, collector: MetricsCollector, tags: dict = None):
+    def __init__(self, name: str, collector: MetricsCollector, tags: dict | None = None):
         self.name = name
         self.collector = collector
         self.tags = tags

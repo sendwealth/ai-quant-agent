@@ -1,12 +1,13 @@
 """真实数据回测 — AkShare A股行情"""
 
+import logging
+
+import akshare as ak
 import numpy as np
 import pandas as pd
-import logging
-import akshare as ak
 
 from quant_agent.backtest.engine import BacktestEngine, CommissionModel, SlippageModel
-from quant_agent.strategy.indicators import rsi, macd, ema, bollinger_bands, adx, atr
+from quant_agent.strategy.indicators import adx, bollinger_bands, ema, macd, rsi
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 logger = logging.getLogger(__name__)
@@ -151,7 +152,7 @@ def main():
           f"{'Sharpe':>7} {'胜率':>6} {'交易':>4}")
     print("-" * 70)
 
-    for code, data in all_results.items():
+    for _code, data in all_results.items():
         for s_name, r in data["results"].items():
             emoji = "🟢" if r.total_return > 0 else "🔴"
             print(f"{emoji}{data['name']:<11} {s_name:<10} {r.total_return:>7.2%} "
@@ -162,7 +163,7 @@ def main():
     print("\n" + "-" * 70)
     best_by_sharpe = None
     best_sharpe = -999
-    for code, data in all_results.items():
+    for _code, data in all_results.items():
         for s_name, r in data["results"].items():
             if r.sharpe_ratio > best_sharpe and r.total_trades > 0:
                 best_sharpe = r.sharpe_ratio

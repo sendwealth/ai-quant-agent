@@ -1,0 +1,5 @@
+# 源码分发 (sdist) 需显式包含非 Python 资源
+recursive-include src/quant_agent/data/samples *
+include LICENSE
+include README.md
+include CHANGELOG.md

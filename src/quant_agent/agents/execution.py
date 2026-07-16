@@ -128,7 +128,7 @@ class ExecutionAgent(BaseAgent):
 
     # -- BaseAgent interface -------------------------------------------------
 
-    def analyze(self, stock_code: str) -> AgentResult:
+    def analyze(self, stock_code: str, **kwargs: Any) -> AgentResult:
         """返回当前组合状态"""
         return AgentResult(
             agent_name=self.name,

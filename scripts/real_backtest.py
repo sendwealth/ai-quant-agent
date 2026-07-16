@@ -1,14 +1,16 @@
 """真实数据回测 — 使用 BaoStock 获取行情，技术指标策略回测"""
 
 from datetime import datetime
+import json
 
 import numpy as np
 import pandas as pd
 
-from quant_agent.data.sources.baostock import BaoStockSource
-from quant_agent.strategy.indicators import rsi, macd, ema, bollinger_bands, adx
 from quant_agent.backtest.engine import BacktestEngine, CommissionModel, SlippageModel
-
+from quant_agent.backtest.guards import check_assumptions
+from quant_agent.backtest.manifest import MANIFEST_SCHEMA_VERSION, build_manifest, data_fingerprint
+from quant_agent.data.sources.baostock import BaoStockSource
+from quant_agent.strategy.indicators import bollinger_bands, ema, macd, rsi
 
 # ── 策略信号生成 ──
 
@@ -64,11 +66,11 @@ STOCKS = {
 
 def run_backtest():
     print(f"\n{'=' * 90}")
-    print(f"  AI Quant Agent v3.0 — 真实数据回测")
+    print("  AI Quant Agent v3.0 — 真实数据回测")
     print(f"  日期: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     print(f"{'=' * 90}")
 
-    print(f"\n📊 获取行情数据 (BaoStock)...")
+    print("\n📊 获取行情数据 (BaoStock)...")
     bs = BaoStockSource()
     price_cache: dict[str, pd.DataFrame] = {}
     for code, name in STOCKS.items():
@@ -96,6 +98,17 @@ def run_backtest():
 
     # ── 逐策略回测 ──
     all_results = []
+    manifest_records = []  # P1.3: 每次回测的运行清单
+
+    execution_assumptions = {
+        "t_plus_one_enforced": False,  # 基线引擎默认不强制 T+1（已知假设）
+        "look_ahead_same_bar": True,   # 同 bar 收盘价决策+成交（前视假设）
+        "commission": "万三 + 印花税千一(卖) + 最低5元",
+        "slippage_bps": 1.0,
+        "adjust": "qfq",
+        "limit_up_down_modeled": False,
+        "suspension_modeled": False,
+    }
 
     for strat_name, strat_fn in STRATEGIES.items():
         print(f"\n{'─' * 90}")
@@ -114,7 +127,30 @@ def run_backtest():
 
             try:
                 signals = strat_fn(df)
+
+                # P1.4: 回测假设守卫 — 检查交易日历/停牌/涨跌停/流动性/复权/前视
+                assumptions = check_assumptions(df, signals, adjust="qfq")
+                for w in assumptions.warnings():
+                    print(f"  ⚠️ [{code}] 假设警告: {w}")
+
                 result = engine.run(df, signals)
+
+                # P1.3: 构造本次运行的清单
+                manifest = build_manifest(
+                    strategy_name=strat_name,
+                    params={"strategy_fn": strat_fn.__name__, "initial_capital": 100000,
+                            "commission_rate": 0.0003, "stamp_tax_rate": 0.001,
+                            "slippage_bps": 1.0},
+                    data_hash=data_fingerprint(df, signals),
+                    benchmark="buy&hold (close-to-close)",
+                    execution_assumptions=execution_assumptions,
+                )
+                manifest_records.append({
+                    "code": code,
+                    "name": name,
+                    "manifest": manifest.to_dict(),
+                    "assumptions": assumptions.to_dict(),
+                })
 
                 strat_results.append({
                     "code": code, "name": name, "strategy": strat_name,
@@ -152,13 +188,13 @@ def run_backtest():
         return
 
     print(f"\n{'=' * 90}")
-    print(f"📋 全局汇总")
+    print("📋 全局汇总")
     print(f"{'=' * 90}")
 
     ardf = pd.DataFrame(all_results)
 
     # 按策略汇总
-    print(f"\n按策略:")
+    print("\n按策略:")
     for strat_name in STRATEGIES:
         sdf = ardf[ardf["strategy"] == strat_name]
         if sdf.empty:
@@ -173,7 +209,7 @@ def run_backtest():
               f"盈利: {wins}/{len(sdf)}")
 
     # 按股票汇总
-    print(f"\n按股票:")
+    print("\n按股票:")
     for code, name in STOCKS.items():
         sdf = ardf[ardf["code"] == code]
         if sdf.empty:
@@ -193,6 +229,22 @@ def run_backtest():
     print(f"\n{'=' * 90}")
     print(f"✅ 回测完成 — {len(all_results)} 组结果")
     print(f"{'=' * 90}\n")
+
+    # P1.3: 持久化回测运行清单（含假设守卫报告），便于复现与审计
+    if manifest_records:
+        out_path = "backtest_manifest.json"
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
+                    "runs": manifest_records,
+                },
+                f,
+                ensure_ascii=False,
+                indent=2,
+                default=str,
+            )
+        print(f"📝 回测清单已写入: {out_path} ({len(manifest_records)} 条)")
 
 
 if __name__ == "__main__":

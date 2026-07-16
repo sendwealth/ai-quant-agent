@@ -5,7 +5,7 @@
 
 LLM 增强的多 Agent 协作 A 股量化交易系统。规则引擎 + LLM 双引擎，支持自然语言交互。
 
-> **v3.1 易用性升级**：零配置开箱即用（无 token / 无网络时自动走样例兜底 + LLM 离线规则增强）；
+> **v3.1 易用性升级**：零配置开箱即用（无 token / 无网络时自动走**内置演示样例**兜底 + LLM 离线规则增强；演示样例为确定性合成数据，覆盖 600519 / 300750 / 000001 三只，用于跑通流程，非真实行情）；
 > 统一 Typer CLI（`analyze` / `screen` / `batch` / `report` / `update-names` / `init` / `preload`）；
 > 分析报告可视化（Markdown / HTML / 走势图）与历史对比。
 
@@ -45,7 +45,7 @@ Agent 通过 **Orchestrator** 编排，使用结构化日志记录，返回标�
 
 - **LLM 双引擎** — 规则引擎为基础，LangChain ChatOpenAI 提供情感分析、报告生成、风险解读
 - **多 Provider + 软降级** — OpenAI / 智谱 GLM / 本地模型(Ollama 等) 自动切换；**无 API key 不崩溃**，自动降级为离线规则增强，三大 LLM 能力始终可用
-- **零配置开箱即用** — 无 token / 无网络时，数据层自动走样例兜底（真实样例或合成演示行情），全流程可跑通
+- **零配置开箱即用** — 无 token / 无网络时，数据层自动走**内置演示样例**兜底（确定性合成数据，仅含 600519 / 300750 / 000001 三只，用于演示与端到端测试）；完整真实分析请配置数据源 token 并用 `quant-agent preload` 预下载数据
 - **统一 CLI** — `quant-agent analyze / screen / batch / report / update-names / init / preload`，带 `--help` 与补全
 - **可视化报告** — 分析结果渲染为 Markdown / HTML，生成价格走势图，并持久化历史可对比
 - **Web UI** — 内置零依赖 Web 服务（`quant-agent web`），浏览器即可做个股分析 / 智能选股 / 查看历史报告与走势图
@@ -105,7 +105,7 @@ quant-agent init
 quant-agent analyze 600519
 quant-agent analyze 600519 --chart --format html
 
-# 零配置离线分析（无 token / 无网络也能跑，自动用样例兜底）
+# 零配置离线分析（无 token / 无网络时自动用内置演示样例兜底；样例仅覆盖 600519 / 300750 / 000001，其它标的需先 `quant-agent preload`）
 quant-agent analyze 600519 --offline
 
 # 智能选股

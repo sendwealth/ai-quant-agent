@@ -77,11 +77,14 @@ class BacktestEngine:
         commission: CommissionModel | None = None,
         slippage: SlippageModel | None = None,
         strategy: Strategy | None = None,
+        enforce_t_plus_one: bool = False,
     ):
         self.initial_capital = initial_capital
         self.commission = commission or CommissionModel()
         self.slippage = slippage or SlippageModel()
         self.strategy = strategy
+        # P1.4: T+1 规则 — 当日买入的股票次日才能卖出（默认关闭以兼容旧回测）
+        self.enforce_t_plus_one = enforce_t_plus_one
 
     def run(
         self,
@@ -89,6 +92,7 @@ class BacktestEngine:
         signals: pd.Series | None = None,
         benchmark: pd.Series | None = None,
         strategy: Strategy | None = None,
+        enforce_t_plus_one: bool | None = None,
     ) -> BacktestResult:
         """Run backtest.
 
@@ -112,6 +116,9 @@ class BacktestEngine:
         if active_strategy is None and signals is None:
             logger.warning("Backtest requires either `signals` or a `strategy`")
             return BacktestResult()
+
+        # P1.4: T+1 强制开关（run 级覆盖实例级）
+        t_plus_one = self.enforce_t_plus_one if enforce_t_plus_one is None else enforce_t_plus_one
 
         # Normalize column names
         if "trade_date" in price_data.columns and "date" not in price_data.columns:
@@ -137,6 +144,7 @@ class BacktestEngine:
         prev_signal = 0
         prev_price = None
         has_position = False
+        last_buy_index = -2  # 最近买入的 bar 下标（用于 T+1）
 
         for i in range(min_len):
             price = float(closes.iloc[i])
@@ -157,11 +165,16 @@ class BacktestEngine:
                 if shares > 0:
                     exec_price = self.slippage.apply(price, "buy")
                     portfolio.buy(stock_code, exec_price, shares)
+                    last_buy_index = i  # 记录买入日（T+1 用）
 
             elif sig == -1 and prev_signal != -1 and stock_code in portfolio.positions:
-                exec_price = self.slippage.apply(price, "sell")
-                pos = portfolio.positions[stock_code]
-                portfolio.sell(stock_code, exec_price, pos.shares)
+                # P1.4: T+1 — 当日买入的股票次日才可卖
+                if t_plus_one and i <= last_buy_index:
+                    pass  # 跳过：T 日买入不可 T 日卖出
+                else:
+                    exec_price = self.slippage.apply(price, "sell")
+                    pos = portfolio.positions[stock_code]
+                    portfolio.sell(stock_code, exec_price, pos.shares)
 
             prev_signal = sig
             prev_price = price

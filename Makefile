@@ -12,21 +12,19 @@
 PYTHON ?= uv run python
 PIP ?= uv run
 
-.PHONY: help check lint type test smoke build format fix clean
+.PHONY: help check lint type test smoke build format fix clean release-verify
 
 help:
 	@echo "Targets: check lint type test smoke build format fix clean"
 
-# 默认门禁：格式 + lint + 测试 + 构建。类型检查作为独立增量任务（见 type 目标），
-# 因项目存在历史类型债务，默认不阻塞发布；CI 中类型作业为 informational。
-check: format lint test build
-	@echo "\n✅ 全部门禁通过 (lint/format/test/build)"
+# 默认门禁：格式 + lint + 类型检查 + 测试 + 构建。类型检查为必过项。
+check: format lint type test build
+	@echo "\n✅ 全部门禁通过 (format/lint/type/test/build)"
 
 lint:
-	$(PYTHON) -m ruff check src tests
+	$(PYTHON) -m ruff check src tests scripts
 
 type:
-	$(PYTHON) -m ruff check --select ALL src || true
 	$(PYTHON) -m mypy src/quant_agent
 
 test:
@@ -48,3 +46,8 @@ fix:
 clean:
 	rm -rf build dist *.egg-info .mypy_cache .pytest_cache
 	find . -name '__pycache__' -type d -prune -exec rm -rf {} +
+
+# P4.2/P4.3/P4.4 发布前额外校验：版本兼容 + 许可证清单
+release-verify:
+	$(PYTHON) -m quant_agent.compat
+	$(PYTHON) scripts/license_check.py

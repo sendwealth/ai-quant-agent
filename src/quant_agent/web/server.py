@@ -27,8 +27,14 @@ import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import cast
 from urllib.parse import parse_qs, urlparse
 
+from ..config import get_settings
+from ..data.validators import validate_stock_code
+from ..observability.alerting import AlertManager
+from ..observability.health import build_health_report
+from ..observability.metrics import MetricsCollector
 from ..orchestrator import Orchestrator
 from ..reporting import (
     latest_for_stock,
@@ -44,6 +50,10 @@ logger = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 REPORTS_DIR = Path("data/reports")
+
+# 进程级可观测性单例（P3.2 / P3.3）
+METRICS = MetricsCollector()
+ALERT_MANAGER = AlertManager()
 
 # 进程内编排器缓存（key = offline 标志）
 _ORCH_CACHE: dict[bool, Orchestrator] = {}
@@ -66,23 +76,57 @@ def _get_orchestrator(offline: bool) -> Orchestrator:
 # ──────────────────────────────────────────────────────────────────────────
 
 
-def health_core() -> dict:
-    offline = False
-    llm_enabled = False
-    app_name = ""
+def health_core(smoke_results: dict | None = None, run_smoke: bool = False) -> dict:
+    """聚合健康报告，反映数据源降级（P3.1）。
+
+    默认不触网，仅基于配置推断降级（离线模式即视为降级）。设置
+    ``run_smoke=True`` 会跑一次真实数据源冒烟并以其 ``degraded`` 为准。
+    报告生成后会顺带触发告警规则检查（数据降级等）。
+    """
+    settings = get_settings()
+    if smoke_results is None and run_smoke:
+        try:
+            from ..data.service import DataService
+
+            smoke_results = DataService(settings).smoke_test()
+        except Exception as e:  # 冒烟失败不阻塞健康端点
+            logger.warning("health smoke failed: %s", e)
+    report = build_health_report(settings, smoke_results=smoke_results)
     try:
-        orch = _get_orchestrator(False)
-        offline = orch.settings.offline_mode
-        llm_enabled = bool(orch.llm and orch.llm.enabled)
-        app_name = orch.settings.app_name
+        ALERT_MANAGER.check(report)
+    except Exception:
+        pass
+    return report
+
+
+def metrics_core() -> str:
+    """返回 Prometheus 文本格式指标（P3.2）。"""
+    return METRICS.to_prometheus()
+
+
+def alerts_core() -> dict:
+    """运行告警规则检查，返回触发的告警（P3.3）。"""
+    settings = get_settings()
+    report = build_health_report(settings)
+    alerts = ALERT_MANAGER.check(report)
+    return {"alerts": [a.to_dict() for a in alerts], "count": len(alerts)}
+
+
+def _validate_stock_code_or_raise(code: str) -> None:
+    """校验股票代码合法性（P3.4 输入校验）。"""
+    try:
+        validate_stock_code(code)
     except Exception as e:
-        logger.warning("health check failed: %s", e)
-    return {
-        "status": "ok",
-        "offline_mode": offline,
-        "llm_enabled": llm_enabled,
-        "app": app_name,
-    }
+        raise ValueError(f"非法股票代码: {code}") from e
+
+
+def _is_authorized(handler: BaseHTTPRequestHandler) -> bool:
+    """Bearer Token 鉴权（P3.4）。未配置 token 时不鉴权。"""
+    token = os.environ.get("QUANT_WEB_AUTH_TOKEN")
+    if not token:
+        return True
+    auth = handler.headers.get("Authorization", "")
+    return auth == f"Bearer {token}"
 
 
 def analyze_core(params: dict) -> dict:
@@ -90,6 +134,7 @@ def analyze_core(params: dict) -> dict:
     stock_code = (params.get("stock_code") or "").strip()
     if not stock_code:
         raise ValueError("请提供 stock_code")
+    _validate_stock_code_or_raise(stock_code)
     days = int(params.get("days", 120) or 120)
     offline = bool(params.get("offline", False))
     want_chart = bool(params.get("chart", False))
@@ -169,6 +214,7 @@ def execute_core(params: dict) -> dict:
     stock_code = (params.get("stock_code") or "").strip()
     if not stock_code:
         raise ValueError("请提供 stock_code")
+    _validate_stock_code_or_raise(stock_code)
     days = int(params.get("days", 120) or 120)
     offline = bool(params.get("offline", False))
 
@@ -242,6 +288,13 @@ def render_markdown_from_dict(data: dict) -> str:
         f"- 信心度: {data.get('confidence')}",
         f"- 建议仓位: {data.get('position_pct')}",
     ]
+    # 数据谱系警示 (P1.2)
+    warnings = data.get("lineage_warnings") or []
+    if warnings:
+        lines.append("")
+        lines.append("> ⚠️ **数据谱系警示 (Data Lineage Warnings)**")
+        for w in warnings:
+            lines.append(f"> - {w}")
     if data.get("llm_analysis"):
         lines.append("\n## LLM 综合报告\n" + str(data.get("llm_analysis")))
     if data.get("risk_interpretation"):
@@ -286,25 +339,44 @@ def _read_json_body(handler) -> dict:
         return {}
     raw = handler.rfile.read(length)
     try:
-        return json.loads(raw.decode("utf-8"))
+        return cast("dict", json.loads(raw.decode("utf-8")))
     except Exception:
         return {}
 
 
 def _api_dispatch(handler, path: str, qs: dict) -> bool:
     """处理 /api/* 路由；返回 True 表示已处理。"""
+    METRICS.counter("http_requests_total", tags={"path": path, "method": handler.command})
+
     if path == "/api/health":
         _json_response(handler, health_core())
+        return True
+    if path == "/api/metrics":
+        body = metrics_core().encode("utf-8")
+        handler.send_response(200)
+        handler.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+        handler.send_header("Content-Length", str(len(body)))
+        handler.end_headers()
+        handler.wfile.write(body)
+        return True
+    if path == "/api/alerts":
+        _json_response(handler, alerts_core())
         return True
     if path == "/api/analyze":
         if handler.command != "POST":
             _error(handler, "仅支持 POST", status=405)
+            return True
+        if not _is_authorized(handler):
+            _error(handler, "未授权：请提供 Authorization: Bearer <token>", status=401)
             return True
         _json_response(handler, analyze_core(_read_json_body(handler)))
         return True
     if path == "/api/execute":
         if handler.command != "POST":
             _error(handler, "仅支持 POST", status=405)
+            return True
+        if not _is_authorized(handler):
+            _error(handler, "未授权：请提供 Authorization: Bearer <token>", status=401)
             return True
         _json_response(handler, execute_core(_read_json_body(handler)))
         return True
@@ -383,10 +455,13 @@ class _Handler(BaseHTTPRequestHandler):
                 return
             _serve_static(self, path)
         except ValueError as e:
+            METRICS.counter("http_errors_total", tags={"type": "bad_request"})
             _error(self, str(e), status=400)
         except FileNotFoundError as e:
+            METRICS.counter("http_errors_total", tags={"type": "not_found"})
             _error(self, str(e), status=404)
         except Exception as e:
+            METRICS.counter("http_errors_total", tags={"type": "server_error"})
             logger.exception("API error")
             _error(self, f"服务器错误: {e}", status=500)
 

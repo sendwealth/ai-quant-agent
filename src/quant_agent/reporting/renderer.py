@@ -22,6 +22,32 @@ def _fmt_pct(v) -> str:
         return "N/A"
 
 
+def _fmt_cache_age(seconds) -> str:
+    """把缓存年龄（秒）格式化为可读串；None 表示非缓存来源。"""
+    if seconds is None:
+        return "-"
+    try:
+        s = float(seconds)
+    except (TypeError, ValueError):
+        return str(seconds)
+    if s < 60:
+        return f"{s:.0f}s"
+    if s < 3600:
+        return f"{s / 60:.0f}m"
+    if s < 86400:
+        return f"{s / 3600:.1f}h"
+    return f"{s / 86400:.0f}d"
+
+
+def _fmt_missing(missing) -> str:
+    """格式化缺失字段列表；空则显示 '-'。"""
+    if not missing:
+        return "-"
+    if isinstance(missing, (list, tuple)):
+        return ", ".join(str(m) for m in missing) or "-"
+    return str(missing)
+
+
 def _agent_block(result: AgentResult | None, title: str) -> str:
     if result is None:
         return f"### {title}\n\n- 状态: 未运行\n"
@@ -138,14 +164,32 @@ def render_markdown(report: AnalysisReport) -> str:
     if report.data_lineage:
         parts.append("## 数据来源 (Data Lineage)")
         parts.append("")
-        parts.append("| 类型 | 来源 | 获取时间 | 可信度 |")
-        parts.append("| --- | --- | --- | --- |")
+        parts.append("| 类型 | 来源 | 获取时间 | 可信度 | 交易日 | 复权 | 缓存年龄 | 缺失字段 | 指纹 |")
+        parts.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
         for prov in report.data_lineage:
             d = prov.to_dict() if hasattr(prov, "to_dict") else prov
             parts.append(
                 f"| {d.get('data_type', '?')} | {d.get('source', '?')} "
-                f"| {d.get('fetched_at', '?')} | {d.get('confidence', '?')} |"
+                f"| {d.get('fetched_at', '?')} | {d.get('confidence', '?')} "
+                f"| {d.get('trading_day', '-')} | {d.get('adjust_status', '-')} "
+                f"| {_fmt_cache_age(d.get('cache_age_seconds'))} "
+                f"| {_fmt_missing(d.get('missing_fields'))} "
+                f"| {d.get('data_hash', '-')} |"
             )
+        parts.append("")
+
+    # 数据谱系显著警示 (P1.2)：样例 / 缓存过期 / 部分财务合并 / 缺失字段 / 降级
+    # 置于报告显眼位置，确保「用了什么数据、可信度如何」对用户透明。
+    warnings = report.lineage_warnings()
+    if warnings:
+        parts.append("> ⚠️ **数据谱系警示 (Data Lineage Warnings)** — 本次分析依赖受限数据：")
+        for w in warnings:
+            parts.append(f"> - {w}")
+        parts.append(">")
+        parts.append(
+            "> 以上结论基于上述受限数据得出，**不构成任何投资建议**；"
+            "请联网获取实时数据或检查本地缓存后重试。"
+        )
         parts.append("")
 
     return "\n".join(parts)

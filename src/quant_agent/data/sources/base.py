@@ -2,20 +2,28 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
 import pandas as pd
 
+# 数据谱系 schema 版本。报告/存储/回测 manifest 应记录此版本以便迁移。
+PROVENANCE_SCHEMA_VERSION = "2.0"
+
 
 @dataclass
 class DataProvenance:
-    """数据谱系 — 记录一份数据的来源与获取时间（P3 数据谱系）。
+    """数据谱系 — 记录一份数据的来源、获取时间与可信度（可复现审计）。
 
-    用于在分析报告中透明展示「数据从哪来、何时获取、可信度如何」，
-    满足开源成熟度对数据可溯源的要求。
+    扩展后的 versioned schema（v2）新增：交易日、复权状态、缓存年龄、
+    字段缺失、降级原因与数据哈希，使每个信号与回测结论都能回答
+    「用了什么数据、何时得到、能否重跑」。
+
+    所有新增字段均有默认值，向后兼容 v1（仅含前 5 个字段）的序列化。
     """
 
     source: str  # 数据源名称：tushare / efinance / akshare / baostock / cache / sample / merged
@@ -23,14 +31,78 @@ class DataProvenance:
     fetched_at: str  # 获取时间（ISO 8601）
     data_type: str  # price / financial
     confidence: str = "high"  # high / partial / low
+    # ── v2 扩展字段 ──
+    version: str = PROVENANCE_SCHEMA_VERSION
+    trading_day: str | None = None  # 数据对应的交易日 (YYYY-MM-DD)
+    adjust_status: str | None = None  # 复权状态：qfq / hfq / raw
+    cache_age_seconds: float | None = None  # 缓存年龄（秒）；None 表示非缓存来源
+    missing_fields: list[str] | None = None  # 缺失字段（部分财务合并 / 样例缺失时显著）
+    degradation_reason: str | None = None  # 降级原因（如 sample_fallback / cache_only / merged）
+    data_hash: str | None = None  # 数据指纹 (sha256 前 16 位)，用于复现与篡改检测
+
+    @staticmethod
+    def compute_hash(data: Any) -> str:
+        """计算数据指纹 (sha256 前 16 位)，用于复现性与篡改检测。
+
+        支持 pandas.DataFrame / dict / 其它可序列化对象；失败则退化为 str(data)。
+        """
+        try:
+            if isinstance(data, pd.DataFrame):
+                payload = data.to_json(orient="records", date_format="iso")
+            elif isinstance(data, dict):
+                payload = json.dumps(data, default=str, sort_keys=True, ensure_ascii=False)
+            elif isinstance(data, (list, tuple)):
+                payload = json.dumps(list(data), default=str, sort_keys=True, ensure_ascii=False)
+            else:
+                payload = str(data)
+        except Exception:
+            payload = str(data)
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+    def is_degraded(self) -> bool:
+        """是否处于降级 / 可疑状态（需在报告中显著警示）。"""
+        return (
+            self.confidence in ("low", "partial")
+            or self.source in ("sample", "cache", "merged")
+            or bool(self.degradation_reason)
+            or bool(self.missing_fields)
+        )
+
+    def warning_reasons(self) -> list[str]:
+        """返回该条谱系需要警示的原因列表（供报告渲染）。"""
+        reasons: list[str] = []
+        if self.source == "sample":
+            reasons.append("使用内置演示样例（合成数据，非真实行情）")
+        elif self.source == "cache":
+            reasons.append("使用本地缓存（未命中实时数据源）")
+        elif self.source == "merged":
+            reasons.append("多源合并补全（部分字段来自不同源）")
+        if self.confidence == "low":
+            reasons.append("数据可信度为低")
+        elif self.confidence == "partial":
+            reasons.append("数据可信度为部分")
+        if self.missing_fields:
+            reasons.append(f"缺失字段: {', '.join(self.missing_fields)}")
+        if self.degradation_reason:
+            reasons.append(f"降级原因: {self.degradation_reason}")
+        if self.cache_age_seconds is not None and self.cache_age_seconds > 86400 * 30:
+            reasons.append(f"缓存较旧 ({self.cache_age_seconds / 86400:.0f} 天)")
+        return reasons
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "version": self.version,
             "source": self.source,
             "identifier": self.identifier,
             "fetched_at": self.fetched_at,
             "data_type": self.data_type,
             "confidence": self.confidence,
+            "trading_day": self.trading_day,
+            "adjust_status": self.adjust_status,
+            "cache_age_seconds": self.cache_age_seconds,
+            "missing_fields": self.missing_fields,
+            "degradation_reason": self.degradation_reason,
+            "data_hash": self.data_hash,
         }
 
 

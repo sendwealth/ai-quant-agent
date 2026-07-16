@@ -6,7 +6,7 @@ import pandas as pd
 
 from ..strategy.indicators import adx, atr, bollinger_bands, ema, macd, rsi
 from ..thresholds import _Thresh, get_thresholds
-from .base import AgentResult, BaseAgent
+from .base import AgentResult, BaseAgent, Signal
 
 
 class TechnicalAgent(BaseAgent):
@@ -144,7 +144,7 @@ class TechnicalAgent(BaseAgent):
         ema_trend: str,
         vol_status: str,
         adx: float,
-    ) -> tuple[str, float, str]:
+    ) -> tuple[Signal, float, str]:
         t = self._thresh
         buy_score = 0.0
         sell_score = 0.0

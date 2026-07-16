@@ -61,6 +61,35 @@ make smoke      # 真实数据源连通性测试（需网络）
 3. 在 PR 中说明：动机、变更内容、测试方式、是否影响默认行为。
 4. 关联相关 Issue（如 `Closes #123`）。
 
+## 发布流程
+
+项目遵循语义化版本：破坏性变更升主版本、新增功能升次版本、修复升补丁版本。
+
+1. 在 `CHANGELOG.md` 的 `Unreleased` 段汇总本次变更；发布时改为对应版本号与日期。
+2. 确保 `make check`（`format/lint/type/test/build`）与 `make release-verify`
+   （兼容性自检 + 许可证清单）全绿。
+3. 推送带 `v` 前缀的 tag（如 `v3.2.0`）；`.github/workflows/release.yml` 会：
+   - 重新验证门禁；
+   - 先发布到 **TestPyPI** 并尝试验证安装；
+   - 再发布到 **PyPI**，生成 `SHA256SUMS` 与 GitHub Release notes。
+4. 手动触发可在 Actions → Release 中选择「仅 TestPyPI 验证」。
+
+## 主分支保护
+
+`main` 分支受保护，合并需满足：CI 全绿、至少 1 次审查、禁止直接 push、
+提交需经 DCO 签署（`git commit -s`）或 CLA 检查。详见
+[季度审查文档](docs/quarterly-review.md#主分支保护规则branch-protection)。
+
+## 签署（DCO）
+
+本仓库要求 **Developer Certificate of Origin (DCO)**。每次提交请使用：
+
+```bash
+git commit -s -m "feat: 你的变更"
+```
+
+提交的 `Signed-off-by` 行即表示你同意 DCO 条款。CI 会校验签名。
+
 ## 安全相关
 
 **请勿在公开 Issue 中报告安全漏洞。** 请按 [SECURITY.md](SECURITY.md) 的私下进行披露。

@@ -10,16 +10,17 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
-from typing import TypeVar
+from typing import TypeVar, cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from pydantic import BaseModel
 
 from ..config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
+T = TypeVar("T", bound=BaseModel)
 
 # 智谱 API base URL (OpenAI 兼容接口)
 _ZHIPU_BASE_URL = "https://open.bigmodel.cn/api/coding/paas/v4"
@@ -160,8 +161,9 @@ class LLMClient:
                 SystemMessage(content=system),
                 HumanMessage(content=user),
             ]
+            assert self.llm is not None
             response = self.llm.invoke(messages)
-            return response.content
+            return str(response.content)
         except Exception as e:
             raise LLMError(f"LLM invoke failed: {e}") from e
 
@@ -197,9 +199,10 @@ class LLMClient:
                 SystemMessage(content=system),
                 HumanMessage(content=user),
             ]
+            assert self.llm is not None
             structured_llm = self.llm.with_structured_output(schema)
             result = structured_llm.invoke(messages)
-            return result
+            return cast("T", result)
         except Exception as e:
             raise LLMError(f"LLM structured_output failed: {e}") from e
 

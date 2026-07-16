@@ -1,16 +1,15 @@
 """选股 + 回测 一体化（多数据源自动降级: BaoStock → AkShare → Tushare）"""
 
-import os
 import logging
-from dotenv import load_dotenv
-load_dotenv()
 
-import pandas as pd
 import numpy as np
-from datetime import datetime
+import pandas as pd
+from dotenv import load_dotenv
 
 from quant_agent.backtest.engine import BacktestEngine, CommissionModel, SlippageModel
-from quant_agent.strategy.indicators import rsi, macd, ema, adx, bollinger_bands
+from quant_agent.strategy.indicators import adx, bollinger_bands, ema, macd, rsi
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 logger = logging.getLogger(__name__)
@@ -41,7 +40,7 @@ def get_daily(code: str, start="20240101", end=None) -> pd.DataFrame | None:
         from quant_agent.data.sources.baostock import BaoStockSource
         src = BaoStockSource()
         return src.get_price_data(code, days=250)
-    except:
+    except Exception:
         return None
 
 
@@ -149,15 +148,20 @@ def score(code: str, df: pd.DataFrame = None) -> dict | None:
     e20, e60 = ema(close, 20), ema(close, 60)
     if len(e60) > 0 and float(e20.iloc[-1]) > float(e60.iloc[-1]):
         tech += 12
-        if current > float(e20.iloc[-1]): tech += 5
+        if current > float(e20.iloc[-1]):
+            tech += 5
     _, _, hist = macd(close)
     if float(hist.iloc[-1]) > 0:
         tech += 8
-        if float(hist.iloc[-1]) > float(hist.iloc[-2]): tech += 5
+        if float(hist.iloc[-1]) > float(hist.iloc[-2]):
+            tech += 5
     rsi_v = float(rsi(close, 14).iloc[-1])
-    if 35 < rsi_v < 65: tech += 5
-    elif rsi_v < 35: tech += 3
-    if float(adx(high, low, close, 14).iloc[-1]) > 25: tech += 5
+    if 35 < rsi_v < 65:
+        tech += 5
+    elif rsi_v < 35:
+        tech += 3
+    if float(adx(high, low, close, 14).iloc[-1]) > 25:
+        tech += 5
 
     # 动量 (35)
     mom = 0
@@ -166,8 +170,10 @@ def score(code: str, df: pd.DataFrame = None) -> dict | None:
     mom += 15 if r20 > 0.1 else (10 if r20 > 0.05 else (5 if r20 > 0 else 0))
     mom += 15 if r60 > 0.2 else (10 if r60 > 0.1 else (5 if r60 > 0 else 0))
     vol = float(close.pct_change().dropna().std() * np.sqrt(252))
-    if 0.15 < vol < 0.4: mom += 5
-    elif vol < 0.15: mom += 2
+    if 0.15 < vol < 0.4:
+        mom += 5
+    elif vol < 0.15:
+        mom += 2
 
     # 流动性 (25)
     liq = 0
@@ -186,7 +192,7 @@ def score(code: str, df: pd.DataFrame = None) -> dict | None:
 
 def main(top_n=10, strategy_name="双均线EMA12/60", use_all_stocks=False):
     print(f"\n{'='*80}")
-    print(f"🦞 AI Quant Agent v3.0 — 自动选股 + 回测")
+    print("🦞 AI Quant Agent v3.0 — 自动选股 + 回测")
     print(f"{'='*80}")
 
     # Step 1: 选股
@@ -215,7 +221,8 @@ def main(top_n=10, strategy_name="双均线EMA12/60", use_all_stocks=False):
         print(f"    {i+1:>2}. {s['code']}  评分:{s['score']:>3}  技术:{s['tech']:>2}  动量:{s['mom']:>2}  流动性:{s['liq']:>2}  价格:{s['price']:>8.2f}")
 
     if not selected:
-        print("❌ 无选股结果"); return
+        print("❌ 无选股结果")
+        return
 
     # Step 2: 回测
     print(f"\n📈 Step 2: 策略 [{strategy_name}] 回测...")
@@ -246,7 +253,8 @@ def main(top_n=10, strategy_name="双均线EMA12/60", use_all_stocks=False):
               f"胜率:{r.win_rate:>5.0%}  交易:{r.total_trades:>3}次")
 
     if not results:
-        print("❌ 无回测结果"); return
+        print("❌ 无回测结果")
+        return
 
     # Step 3: 汇总
     rdf = pd.DataFrame(results)
