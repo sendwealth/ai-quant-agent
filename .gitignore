@@ -17,6 +17,10 @@ coverage.xml
 .mypy_cache/
 .ruff_cache/
 
+# Lint/type error dump files (generated, not source)
+mypy_errors.txt
+ruff_errors.txt
+
 # IDE
 .vscode/
 .idea/
