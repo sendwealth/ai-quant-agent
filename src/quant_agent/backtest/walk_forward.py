@@ -75,8 +75,8 @@ def validate_point_in_time(
     - signals 不得含 NaN（未对齐/缺失）。
     - price_data 须按时间升序（``date`` 列单调）。
 
-    注意：本函数仅做结构层面的前视防护；真正「当日信号只能用当日及之前数据」
-    由策略接口 ``StrategyContext(price, prev_price, ...)`` 在逐日模拟中结构性保证。
+    注意：本函数仅做结构层面的前视防护；逐日无前视由
+    :func:`_strict_oos_signals` 在样本外生成信号时结构性保证。
     """
     issues: list[str] = []
     if signals is not None:
@@ -93,6 +93,50 @@ def validate_point_in_time(
     return issues
 
 
+def _strict_oos_signals(
+    signal_fn: Callable[[pd.DataFrame], pd.Series],
+    train_pd: pd.DataFrame,
+    test_pd: pd.DataFrame,
+) -> pd.Series:
+    """逐日无前视地生成样本外（OOS）信号。
+
+    对测试窗口的每个 bar ``i``，仅用 ``train + test[:i+1]``（截至当日及之前的
+    数据）调用 ``signal_fn``，取返回序列的最后一个值作为 bar ``i`` 的信号。
+
+    这从结构上杜绝「策略函数内部读取测试窗口未来行」导致的前视泄漏：任何 bar
+    的信号都只能依赖其自身及之前的数据，无法触及 ``test[i+1:]``。
+
+    Args:
+        signal_fn: 策略函数，接收一段 OHLCV 子集，返回与其对齐的 ``signals``
+            （1/0/-1）；约定返回序列的**最后一个元素**对应当前（最新）bar 的决策。
+        train_pd: 训练窗口（全部为历史数据）。
+        test_pd: 测试窗口（按时间升序）。
+
+    Returns:
+        与 ``test_pd`` 对齐的信号序列。
+
+    Raises:
+        ValueError: signal_fn 返回长度与输入窗口不一致（对齐被破坏）。
+    """
+    if len(test_pd) == 0:
+        return pd.Series(dtype="int64", index=test_pd.index)
+    values: list[int] = []
+    for i in range(len(test_pd)):
+        window = pd.concat([train_pd, test_pd.iloc[: i + 1]], ignore_index=False)
+        sig = signal_fn(window)
+        if len(sig) != len(window):
+            raise ValueError(
+                f"signal_fn 返回长度({len(sig)})与输入窗口({len(window)})不一致，"
+                "无法保证逐日无前视对齐"
+            )
+        last = sig.iloc[-1]
+        values.append(int(last) if pd.notna(last) else 0)
+    s = pd.Series(values, index=test_pd.index, dtype="int64")
+    # 信号缺失（NaN / 前视warmup未就绪）视为持有(0)，并向后沿用上一有效信号。
+    s = s.ffill().fillna(0).astype(int)
+    return s
+
+
 @dataclass
 class WalkForwardFold:
     """单折 walk-forward 结果。"""
@@ -101,6 +145,7 @@ class WalkForwardFold:
     test_idx: range
     in_sample: BacktestResult
     out_of_sample: BacktestResult
+    oos_signals: pd.Series | None = None
 
 
 @dataclass
@@ -156,13 +201,18 @@ class WalkForwardValidator:
 
     每折：用 ``signal_fn`` 在训练窗口上生成信号并在训练集回测（样本内），
     再在紧随其后的测试窗口上用同样逻辑生成信号并回测（样本外）。测试窗口
-    严格位于训练窗口之后，因此不存在前视泄漏。
+    严格位于训练窗口之后，因此不存在跨折前视泄漏。
+
+    关键加固（推荐 #3）：样本外信号默认以**逐日无前视**方式生成——每个测试
+    bar 只把 ``train + test[:i+1]`` 喂给策略，结构性杜绝策略函数内部引用
+    未来行导致的前视泄漏（``run(strict=True)``，默认开启）。
 
     Args:
         engine: 回测引擎实例（含佣金/滑点/复权配置）。
         signal_fn: 接收一段 ``price_data`` 子集，返回与其对齐的
             ``signals`` 序列（1/0/-1）。代表「策略逻辑」，在每折独立调用，
-            天然体现「用历史拟合、在未见数据验证」。
+            天然体现「用历史拟合、在未见数据验证」。约定返回序列最后一个元素
+            对应当前（最新）bar 的决策。
     """
 
     def __init__(
@@ -182,6 +232,7 @@ class WalkForwardValidator:
         benchmark: pd.Series | None = None,
         provenance: list | None = None,
         research_mode: bool = False,
+        strict: bool = True,
     ) -> WalkForwardReport:
         """执行 walk-forward 验证。
 
@@ -192,6 +243,10 @@ class WalkForwardValidator:
             provenance: 可选数据谱系；命中硬门禁时回测会被拦截（推荐 #2）。
             research_mode: 显式研究模式，透传给每折 ``engine.run``；缺谱系时
                 仅此模式可豁免 fail closed（推荐 #2）。
+            strict: 是否对样本外信号启用**逐日无前视**生成（默认 ``True``）。
+                开启后，每个测试 bar 只基于 ``train + test[:i+1]`` 调用策略，
+                结构性阻止策略内部引用未来行；关闭则沿用旧行为（整个测试窗口
+                一次性传入，存在前视泄漏风险，**不建议**）。
 
         Returns:
             WalkForwardReport
@@ -201,8 +256,13 @@ class WalkForwardValidator:
         for train_idx, test_idx in splits:
             train_pd = price_data.iloc[list(train_idx)]
             test_pd = price_data.iloc[list(test_idx)]
+            # 样本内：整个训练窗口一次性生成（训练窗口全为历史，无 OOS 泄漏）。
             sig_train = self.signal_fn(train_pd)
-            sig_test = self.signal_fn(test_pd)
+            # 样本外：默认逐日无前视，结构性防止策略读取未来行（推荐 #3）。
+            if strict:
+                sig_test = _strict_oos_signals(self.signal_fn, train_pd, test_pd)
+            else:
+                sig_test = self.signal_fn(test_pd)
 
             bench_train = benchmark.iloc[list(train_idx)] if benchmark is not None else None
             bench_test = benchmark.iloc[list(test_idx)] if benchmark is not None else None
@@ -227,6 +287,7 @@ class WalkForwardValidator:
                     test_idx=test_idx,
                     in_sample=in_sample,
                     out_of_sample=out_of_sample,
+                    oos_signals=sig_test,
                 )
             )
         return WalkForwardReport(folds=folds)

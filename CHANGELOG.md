@@ -67,6 +67,11 @@
   问题（`point_in_time_issues`）；新增 `backtest/walk_forward.py`——无泄漏的
   `walk_forward_splits`、样本内/外验证器 `WalkForwardValidator`、`validate_point_in_time`
   （信号越界/NaN/日期乱序检测）。滑点与佣金此前已在引擎内。
+- **#3 walk-forward 逐日无前视（防前视泄漏增强）**：`WalkForwardValidator.run` 默认
+  ``strict=True``，样本外信号改为**逐日生成**——每个测试 bar 仅将 ``train + test[:i+1]``
+  喂给策略函数，结构性杜绝策略内部引用未来行导致的前视泄漏（旧行为 ``strict=False``
+  仍保留但默认关闭）。`WalkForwardFold` 新增 ``oos_signals`` 字段便于审计；策略返回长度
+  与窗口不一致时严格模式报错。`oos_signals` 以 NaN→持有(0) 并沿用上一有效信号。
 - **#5 实盘就绪 scaffold**：新增 `execution/broker.py`（刻意与模拟执行器解耦）——券商适配
   `BrokerAdapter`、幂等下单 `IdempotentBroker`（`make_idempotency_key` 去重）、回报对账
   `OrderReconciler`、市场状态约束 `MarketCalendar` 与涨跌停判定 `price_within_limit`。
