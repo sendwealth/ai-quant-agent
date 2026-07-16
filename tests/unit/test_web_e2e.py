@@ -109,12 +109,14 @@ def test_analyze_authorized_with_token():
         try:
             req = urllib.request.Request(
                 f"http://127.0.0.1:{port}/api/analyze",
-                data=json.dumps({"stock_code": "300750"}).encode(),
+                # 走离线模式：只读本地缓存/内置样例，不触网（见文件头「离线、不触网」约定），
+                # 否则默认在线会真实联网拉取行情/财务，触发本机网络依赖与超时。
+                data=json.dumps({"stock_code": "300750", "offline": True}).encode(),
                 method="POST",
                 headers={"Authorization": "Bearer e2e-secret"},
             )
             try:
-                urllib.request.urlopen(req, timeout=5)
+                urllib.request.urlopen(req, timeout=10)
                 # 鉴权通过；离线无数据可能进入 400/500，但不能是 401
             except urllib.error.HTTPError as e:
                 assert e.code != 401

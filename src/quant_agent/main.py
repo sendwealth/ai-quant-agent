@@ -9,17 +9,23 @@
 """
 
 import logging
+import warnings
 
 from quant_agent.orchestrator import AnalysisReport, Orchestrator
 
 
 def run_pipeline(stock_code: str = "300750", days: int = 250) -> dict:
-    """完整分析 + 执行流水线（旧版包装器，已弃用，请改用 quant-agent CLI）。"""
-    """完整分析 + 执行流水线
+    """完整分析 + 执行流水线（向后兼容包装器，已弃用，请改用 quant-agent CLI）。
 
-    向后兼容的包装器：内部委托给 Orchestrator.analyze()。
-    返回值格式与原始实现一致，确保调用方不受影响。
+    内部委托给 Orchestrator.analyze()，返回值格式与原始实现一致，
+    确保调用方不受影响。
     """
+    warnings.warn(
+        "quant_agent.main.run_pipeline is deprecated; use the `quant-agent` CLI "
+        "(quant_agent.cli) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
     orch = Orchestrator()
@@ -40,6 +46,12 @@ def run_pipeline(stock_code: str = "300750", days: int = 250) -> dict:
 
 
 if __name__ == "__main__":
+    warnings.warn(
+        "Running `python -m quant_agent.main` is deprecated; use the `quant-agent` "
+        "CLI (quant_agent.cli) instead, e.g. `quant-agent analyze 600519`.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     import argparse
 
     parser = argparse.ArgumentParser(description="AI Quant Agent v3.0")
