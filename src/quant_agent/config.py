@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     )
     akshare_timeout: int = 10
     data_cache_ttl: int = 1800  # 秒
+    # WeStock 数据源开关（腾讯自选股，npx CLI，免费无需 token）
+    westock_enabled: bool = True
 
     # ── 存储 ──
     data_dir: str = "data/cache"

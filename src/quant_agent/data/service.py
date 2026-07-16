@@ -60,6 +60,17 @@ class DataService:
         except Exception as e:
             logger.warning(f"efinance init failed: {e}")
 
+        # WeStock（腾讯自选股，免费，npx CLI，无 token）
+        try:
+            from .sources.westock import WeStockSource
+
+            self._westock = WeStockSource(enabled=self.settings.westock_enabled)
+            if self._westock.available:
+                self._sources.append(self._westock)
+                logger.info("WeStock data source ready")
+        except Exception as e:
+            logger.warning(f"WeStock init failed: {e}")
+
         # AkShare（行情数据主力，免费）
         try:
             self._akshare = AkshareSource(timeout=self.settings.akshare_timeout)
@@ -91,6 +102,10 @@ class DataService:
     @property
     def efinance(self):
         return self._efinance if hasattr(self, "_efinance") else None
+
+    @property
+    def westock(self):
+        return self._westock if hasattr(self, "_westock") else None
 
     @property
     def akshare(self) -> AkshareSource | None:

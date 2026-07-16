@@ -17,7 +17,7 @@ A 股量化交易系统，LLM 增强 Orchestrator 驱动多 Agent 协作架构�
 
 - Python 3.10+, 包管理: uv
 - LLM: LangChain + LangGraph (OpenAI / 智谱 GLM 双 provider)
-- 数据源: efinance (免费行情+财务), tushare (财务报表), akshare (行情+财务), baostock (免费行情)
+- 数据源: efinance (免费行情+财务), tushare (财务报表), akshare (行情+财务), baostock (免费行情), westock (腾讯自选股, npx CLI, 免费无 token)
 - 配置: pydantic-settings + dotenv (AliasChoices) + YAML
 - 存储: Parquet (当前) → PostgreSQL/TimescaleDB (后续)
 - 测试: pytest + pytest-cov (498 passed)
@@ -42,6 +42,7 @@ src/quant_agent/
 │   ├── sources/akshare.py  # AkShare 适配器 (行情 + 财务 + 速率限制)
 │   ├── sources/baostock.py # BaoStock 适配器 (免费行情, 重试 + 速率限制)
 │   ├── sources/efinance.py # efinance 适配器 (免费行情 + 财务, 东方财富 API)
+│   ├── sources/westock.py   # WeStock 适配器 (腾讯自选股, npx CLI, 免费无 token)
 │   ├── rate_limiter.py     # Token bucket 速率限制器
 │   ├── normalizer.py       # 列名标准化 (缺失列抛异常)
 │   ├── validator.py        # 数据质量校验 (null/停牌/非正价格) + repair_price_data
