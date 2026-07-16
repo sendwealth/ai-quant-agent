@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 
 from quant_agent.config import get_settings
@@ -25,6 +26,11 @@ def main() -> int:
     parser.add_argument("--days", type=int, default=5, help="回溯天数 (默认 5)")
     parser.add_argument("--json", action="store_true", help="以 JSON 输出完整报告")
     parser.add_argument(
+        "--out",
+        default="smoke-report.json",
+        help="JSON 报告写出路径（默认 smoke-report.json，供 CI artifact / 告警使用）",
+    )
+    parser.add_argument(
         "--no-fail",
         action="store_true",
         help="即使全部失败也返回退出码 0（非阻断性巡检）",
@@ -36,7 +42,15 @@ def main() -> int:
     report = svc.smoke_test(stock_code=args.stock, days=args.days)
 
     if args.json:
-        print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
+        payload = json.dumps(report, ensure_ascii=False, indent=2, default=str)
+        print(payload)
+        # 写出结构化报告，供 CI artifact 上传与下游告警/健康评分消费
+        # （推荐 #3：不再只是终端文本，smoke 结果可机读、可持久化）。
+        try:
+            with open(args.out, "w", encoding="utf-8") as f:
+                f.write(payload)
+        except OSError as e:
+            print(f"⚠️ 写出报告失败: {e}", file=sys.stderr)
     else:
         print(
             f"数据源冒烟测试结果: ok={report['ok']}/{report['total']} "

@@ -31,6 +31,7 @@ from typing import cast
 from urllib.parse import parse_qs, urlparse
 
 from ..config import get_settings
+from ..data.gate import evaluate_trust
 from ..data.validators import validate_stock_code
 from ..observability.alerting import AlertManager
 from ..observability.health import build_health_report
@@ -164,6 +165,7 @@ def analyze_core(params: dict) -> dict:
         "markdown": render_markdown(result),
         "report": result.to_dict(),
         "chart_url": chart_url,
+        "data_warning": bool(evaluate_trust(result.data_lineage, "report").reasons),
     }
 
 
@@ -231,6 +233,7 @@ def execute_core(params: dict) -> dict:
         "executed": result.risk_result.signal if result.risk_result else "HOLD",
         "markdown": render_markdown(result),
         "report": result.to_dict(),
+        "data_warning": bool(evaluate_trust(result.data_lineage, "report").reasons),
     }
 
 

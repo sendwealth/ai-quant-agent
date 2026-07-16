@@ -14,6 +14,10 @@ from quant_agent.data.smoke import (
     smoke_test_source,
 )
 from quant_agent.data.sources.base import DataSource
+from quant_agent.observability.health import (
+    compute_data_health_score,
+    score_source_result,
+)
 
 
 class _FakeSource(DataSource):
@@ -153,3 +157,55 @@ def test_data_service_smoke_test_aggregates(monkeypatch):
     assert report["failed"] == 1
     names = {r["source"] for r in report["results"]}
     assert names == {"tushare", "akshare"}
+
+
+# ── 推荐 #3：数据源健康评分 ──────────────────────────────────────────────
+
+
+def test_score_source_ok_is_100():
+    assert score_source_result({"source": "t", "ok": True, "latency_ms": 10}) == 100
+
+
+def test_score_source_ok_latency_penalty():
+    # 延迟 2100ms → 超过 1000ms 的 1100ms / 100 = 11 分扣减
+    assert score_source_result({"source": "t", "ok": True, "latency_ms": 2100}) == 89
+
+
+def test_score_source_failed_is_0():
+    assert score_source_result({"source": "t", "ok": False, "skipped": False}) == 0
+
+
+def test_score_source_skipped_is_neutral():
+    assert score_source_result({"source": "t", "skipped": True}) is None
+
+
+def test_compute_data_health_score_aggregation():
+    smoke = {
+        "results": [
+            {"source": "tushare", "ok": True, "latency_ms": 50, "skipped": False},
+            {"source": "akshare", "ok": False, "skipped": False},
+            {"source": "baostock", "ok": False, "skipped": True},
+        ]
+    }
+    score = compute_data_health_score(smoke)
+    assert score["overall_score"] == 50  # (100 + 0) / 2 真实源
+    assert score["healthy_count"] == 1
+    assert score["failed_count"] == 1
+    assert score["skipped_count"] == 1
+    assert score["failed_sources"] == ["akshare"]
+
+
+def test_compute_data_health_score_no_smoke():
+    assert compute_data_health_score(None)["overall_score"] == 0
+
+
+def test_smoke_report_includes_health_score():
+    results = [
+        SourceSmokeResult(source="tushare", ok=True, rows=5, latency_ms=12.0),
+        SourceSmokeResult(source="akshare", ok=False, error="boom", skipped=False),
+        SourceSmokeResult(source="baostock", ok=False, skipped=True, skip_reason="no creds"),
+    ]
+    rep = smoke_report(results)
+    assert "data_health_score" in rep
+    assert rep["data_health_score"]["overall_score"] == 50
+    assert rep["data_health_score"]["failed_sources"] == ["akshare"]

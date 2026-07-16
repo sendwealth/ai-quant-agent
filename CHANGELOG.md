@@ -46,6 +46,25 @@
 - **P4.5 季度审查**：新增 `docs/quarterly-review.md` 模板（依赖/数据源/许可证/路线图/
   安全基线），书面记录主分支保护规则。
 
+### 可信度硬约束（建议 #2–#5 落地）
+- **#2 数据可信门禁**：新增 `data/gate.py`（`evaluate_trust` / `DataTrustError`）。
+  `sample`/`low` 数据被**硬阻断**进入交易与回测决策（`trading`/`backtest`），只读用途
+  强制报告水印 + Web 红色警示横幅；`web/server.py` 暴露 `data_warning` 标志。
+- **#3 数据源健康评分 + 告警**：`observability/health.py` 新增 `compute_data_health_score`
+  （单源 0–100 + 整体聚合 + 失败源列表）；`observability/alerting.py` 新增
+  `smoke_source_failure_rule`（真实失败源 critical）与 `data_health_score_rule`
+  （健康分过低 warning），并注册为默认规则；`data/smoke.py` 报告附带 `data_health_score`；
+  CI 工作流把冒烟结果渲染为 Step Summary 并暴露 `degraded`/`failed_sources` 输出（不再只
+  上传空 artifact），脚本新增 `--out` 写出 `smoke-report.json`。
+- **#4 回测可信度**：`backtest/engine.py` 记录复权方式（`adjust`）与 point-in-time 校验
+  问题（`point_in_time_issues`）；新增 `backtest/walk_forward.py`——无泄漏的
+  `walk_forward_splits`、样本内/外验证器 `WalkForwardValidator`、`validate_point_in_time`
+  （信号越界/NaN/日期乱序检测）。滑点与佣金此前已在引擎内。
+- **#5 实盘就绪 scaffold**：新增 `execution/broker.py`（刻意与模拟执行器解耦）——券商适配
+  `BrokerAdapter`、幂等下单 `IdempotentBroker`（`make_idempotency_key` 去重）、回报对账
+  `OrderReconciler`、市场状态约束 `MarketCalendar` 与涨跌停判定 `price_within_limit`。
+  明确标注为**模板/非生产**，需资质团队接入真实券商后方可启用。
+
 ## [3.1.0] - 2026-04-11
 - 多 Agent 协作架构（基本面 / 技术 / 情感 / 规划 / 风控 / 执行）。
 - LLM 增强：情感分析、指令解析、报告生成、风险解读（OpenAI / 智谱双 provider）。

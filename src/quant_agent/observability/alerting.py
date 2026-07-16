@@ -58,6 +58,56 @@ def component_down_rule(report: dict[str, Any]) -> Alert | None:
     return None
 
 
+def smoke_source_failure_rule(report: dict[str, Any]) -> Alert | None:
+    """真实数据源冒烟失败 → critical 告警（推荐 #3）。
+
+    仅当报告携带 ``smoke`` 数据（即跑过真实冒烟）时生效；跳过(skipped)源
+    （缺凭证/未配置）不算故障，避免把「未配置 tushare token」误报为宕机。
+    """
+    if report.get("smoke") is None:
+        return None
+    failed = (report.get("data_health_score") or {}).get("failed_sources") or []
+    if failed:
+        return Alert(
+            rule="smoke_source_failure",
+            severity="critical",
+            message=f"数据源冒烟失败: {', '.join(failed)}（真实行情不可达，须立即排查）",
+            context={
+                "failed_sources": failed,
+                "data_health_score": report.get("data_health_score"),
+            },
+        )
+    return None
+
+
+# 健康分低于该阈值触发 warning（推荐 #3）
+DATA_HEALTH_SCORE_WARN_THRESHOLD = 60
+
+
+def data_health_score_rule(report: dict[str, Any]) -> Alert | None:
+    """数据源整体健康分过低 → warning 告警（推荐 #3）。
+
+    仅当真正跑过冒烟（``smoke`` 存在且存在真实源）时生效，避免离线/未冒烟
+    场景下把 0 分误判为告警。
+    """
+    if report.get("smoke") is None:
+        return None
+    score_info = report.get("data_health_score") or {}
+    if (score_info.get("healthy_count", 0) + score_info.get("failed_count", 0)) == 0:
+        return None
+    if score_info.get("overall_score", 100) < DATA_HEALTH_SCORE_WARN_THRESHOLD:
+        return Alert(
+            rule="data_health_score",
+            severity="warning",
+            message=(
+                f"数据源健康分偏低: {score_info.get('overall_score')}/100 "
+                f"（低于阈值 {DATA_HEALTH_SCORE_WARN_THRESHOLD}）"
+            ),
+            context={"data_health_score": score_info},
+        )
+    return None
+
+
 class AlertManager:
     """规则化告警管理器。
 
@@ -71,7 +121,12 @@ class AlertManager:
         rules: list[AlertRule] | None = None,
         notifier: Callable[[Alert], None] | None = None,
     ) -> None:
-        self.rules = rules or [data_degradation_rule, component_down_rule]
+        self.rules = rules or [
+            data_degradation_rule,
+            component_down_rule,
+            smoke_source_failure_rule,
+            data_health_score_rule,
+        ]
         self.notifier = notifier
 
     def check(self, report: dict[str, Any]) -> list[Alert]:

@@ -18,6 +18,7 @@ import time
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from ..observability.health import compute_data_health_score
 from .sources.base import DataSource
 
 
@@ -101,4 +102,9 @@ def smoke_report(results: list[SourceSmokeResult]) -> dict[str, Any]:
             else None
         ),
         "results": [r.to_dict() for r in results],
+        # 数据源健康评分（推荐 #3）：把冒烟结果量化为可机读分数，供 CI 告警与
+        # 健康端点消费，而不只是文本/artifact。
+        "data_health_score": compute_data_health_score(
+            {"results": [r.to_dict() for r in results]}
+        ),
     }

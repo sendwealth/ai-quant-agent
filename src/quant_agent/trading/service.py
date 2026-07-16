@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from ..agents.execution import Order
+from ..data.gate import DataTrustError, evaluate_trust
 
 if TYPE_CHECKING:
     from ..agents.execution import ExecutionAgent
@@ -47,6 +48,13 @@ class TradingService:
         current_date: str | None = None,
     ) -> Order | None:
         """根据报告里的共识信号显式下单。返回成交订单（若无则为 None）。"""
+        # 数据可信门禁（推荐 #2）：合成/低可信度数据禁止进入交易决策。
+        try:
+            evaluate_trust(report.data_lineage, "trading").require()
+        except DataTrustError as e:
+            logger.warning("交易被数据可信门禁拦截: %s", e)
+            return None
+
         risk_result = report.risk_result
         if risk_result is None:
             logger.info("无风控结果，跳过交易")

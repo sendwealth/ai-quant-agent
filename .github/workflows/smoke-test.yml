@@ -1,8 +1,9 @@
 name: Data Source Smoke Test
 
-# P1.5 — 数据源冒烟定时工作流
-# 每日 UTC 01:00 校验所有已配置数据源可达性；数据源故障会在 Summary 中告警，
-# 但不阻断其它 CI（continue-on-error），避免外部 API 抖动误伤主干。
+# P1.5 — 数据源冒烟定时工作流（推荐 #3 增强）
+# 每日 UTC 01:00 校验所有已配置数据源可达性；冒烟结果写入结构化 JSON、
+# 渲染为 Step Summary 并暴露 degraded/failed_sources 输出，供下游告警/健康
+# 评分消费。默认 continue-on-error，避免外部 API 抖动误伤主干；但结果可见。
 
 on:
   schedule:
@@ -18,6 +19,9 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     continue-on-error: true
+    outputs:
+      degraded: ${{ steps.summary.outputs.degraded }}
+      failed_sources: ${{ steps.summary.outputs.failed_sources }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,7 +38,72 @@ jobs:
         env:
           QUANT_TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
           QUANT_OFFLINE_MODE: "false"
-        run: uv run python scripts/smoke_test_sources.py --json --no-fail
+        run: uv run python scripts/smoke_test_sources.py --json --out smoke-report.json --no-fail
+
+      - name: Summarize smoke report
+        id: summary
+        if: always()
+        env:
+          GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
+          GITHUB_OUTPUT: ${{ github.output }}
+        run: |
+          uv run python - <<'PY'
+          import json, os, sys
+          try:
+              with open("smoke-report.json", encoding="utf-8") as f:
+                  r = json.load(f)
+          except FileNotFoundError:
+              print("smoke-report.json 未生成", file=sys.stderr)
+              sys.exit(0)
+
+          degraded = bool(r.get("degraded"))
+          ok = r.get("ok", 0)
+          total = r.get("total", 0)
+          failed = r.get("failed", 0)
+          skipped = r.get("skipped", 0)
+          lines = [
+              "## 数据源冒烟结果",
+              f"- 状态: {'⚠️ 降级（无可用实时数据源）' if degraded else '✅ 正常'}",
+              f"- 健康源: {ok}/{total}，失败: {failed}，跳过: {skipped}",
+              "",
+              "| 数据源 | 状态 | 行数 | 延迟(ms) | 说明 |",
+              "|---|---|---|---|---|",
+          ]
+          failed_sources = []
+          for res in r.get("results", []):
+              if res.get("skipped"):
+                  status, extra = "SKIP", res.get("skip_reason") or ""
+              elif res.get("ok"):
+                  status, extra = "OK", f"{res.get('rows')} rows"
+              else:
+                  status, extra = "FAIL", res.get("error") or "unknown"
+                  failed_sources.append(res.get("source"))
+              lines.append(
+                  f"| {res.get('source')} | {status} | {res.get('rows', 0)} "
+                  f"| {res.get('latency_ms', 0)} | {extra} |"
+              )
+
+          # 数据源健康评分（推荐 #3）
+          score = r.get("data_health_score", {})
+          if score:
+              lines += [
+                  "",
+                  f"**整体健康分**: {score.get('overall_score')}/100 "
+                  f"（健康 {score.get('healthy_count')} / 失败 {score.get('failed_count')} "
+                  f"/ 跳过 {score.get('skipped_count')}）",
+              ]
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as f:
+                  f.write("\n".join(lines) + "\n")
+
+          out_path = os.environ.get("GITHUB_OUTPUT")
+          if out_path:
+              with open(out_path, "a", encoding="utf-8") as f:
+                  f.write(f"degraded={str(degraded).lower()}\n")
+                  f.write(f"failed_sources={','.join(failed_sources)}\n")
+          PY
 
       - name: Upload smoke report
         if: always()

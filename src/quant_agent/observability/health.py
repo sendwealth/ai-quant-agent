@@ -12,6 +12,59 @@ from typing import Any
 from ..config import Settings
 
 
+def score_source_result(result: dict[str, Any]) -> int | None:
+    """对单条冒烟结果打分（0–100），可机读供健康评分/告警使用。
+
+    - 成功(ok)：满分 100，按延迟轻微扣分（>1000ms 起每 100ms 扣 1 分，封顶 40）。
+    - 失败(非跳过)：0 分。
+    - 跳过(skipped，缺凭证/不可用)：中性，返回 ``None``，不计入整体均分，
+      避免把「未配置 token」误判为数据源故障。
+
+    对应建议 #3：把每日 smoke 结果变成「数据源健康评分」而非仅文本报告。
+    """
+    if result.get("skipped"):
+        return None
+    if result.get("ok"):
+        latency = float(result.get("latency_ms") or 0)
+        penalty = max(0.0, min(40.0, (latency - 1000.0) / 100.0))
+        return int(100 - penalty)
+    return 0
+
+
+def compute_data_health_score(smoke_results: dict[str, Any] | None) -> dict[str, Any]:
+    """聚合冒烟结果为数据源健康评分（推荐 #3）。
+
+    Returns:
+        dict，含 ``overall_score``（0–100，无真实源时为 0）、
+        ``failed_sources``（真实失败源名，供告警）、``healthy/failed/skipped``
+        计数与 ``per_source`` 映射。
+    """
+    if smoke_results is None:
+        return {
+            "overall_score": 0,
+            "healthy_count": 0,
+            "failed_count": 0,
+            "skipped_count": 0,
+            "failed_sources": [],
+            "per_source": {},
+        }
+    results = smoke_results.get("results", []) or []
+    scored: dict[str, int | None] = {r.get("source"): score_source_result(r) for r in results}
+    real = [sc for sc in scored.values() if sc is not None]
+    overall = int(sum(real) / len(real)) if real else 0
+    failed_sources = [
+        r.get("source") for r in results if not r.get("ok") and not r.get("skipped")
+    ]
+    return {
+        "overall_score": overall,
+        "healthy_count": sum(1 for r in results if r.get("ok")),
+        "failed_count": len(failed_sources),
+        "skipped_count": sum(1 for r in results if r.get("skipped")),
+        "failed_sources": failed_sources,
+        "per_source": dict(scored),
+    }
+
+
 def _data_source_summary(settings: Settings) -> dict[str, Any]:
     """基于配置推断已启用的数据源（不触网）。"""
     sources: list[dict[str, Any]] = []
@@ -61,6 +114,9 @@ def build_health_report(
         data_degraded = offline
         data_detail = "offline_mode" if offline else "在线（未做实时冒烟）"
 
+    # 数据源健康评分（推荐 #3）：把 smoke 结果转成可量化分数与健康源列表
+    data_health_score = compute_data_health_score(smoke_results)
+
     components: list[dict[str, Any]] = [
         {
             "name": "datasource",
@@ -102,4 +158,5 @@ def build_health_report(
         "components": components,
         "data_sources": ds_summary,
         "smoke": smoke_results,
+        "data_health_score": data_health_score,
     }

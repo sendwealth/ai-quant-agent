@@ -114,7 +114,11 @@ $("#analyze-form").addEventListener("submit", async (e) => {
         md = "_（无报告内容）_";
       }
     }
-    let html = `<div class="report-card">${renderMarkdown(md)}</div>`;
+    let html = "";
+    if (d.data_warning) {
+      html += `<div class="watermark">⚠️ <strong>数据可信警示</strong>：本报告基于受限/合成数据，不构成投资建议。</div>`;
+    }
+    html += `<div class="report-card">${renderMarkdown(md)}</div>`;
     if (d.chart_url) {
       html += `<img class="chart-img" src="${d.chart_url}" alt="走势图" />`;
     }

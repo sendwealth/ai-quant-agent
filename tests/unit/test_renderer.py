@@ -8,13 +8,13 @@ from quant_agent.reporting.renderer import render_html, render_markdown
 
 
 def _prov(**kw) -> DataProvenance:
-    base = dict(
-        source="sample",
-        identifier="600519:price",
-        fetched_at="2026-07-15T00:00:00",
-        data_type="price",
-        confidence="low",
-    )
+    base = {
+        "source": "sample",
+        "identifier": "600519:price",
+        "fetched_at": "2026-07-15T00:00:00",
+        "data_type": "price",
+        "confidence": "low",
+    }
     base.update(kw)
     return DataProvenance(**base)
 

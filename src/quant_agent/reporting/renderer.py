@@ -8,6 +8,7 @@ from __future__ import annotations
 import html
 
 from ..agents.base import AgentResult
+from ..data.gate import evaluate_trust
 from ..orchestrator import AnalysisReport
 
 
@@ -99,6 +100,25 @@ def _no_data_banner(report: AnalysisReport) -> str:
     )
 
 
+def _trust_watermark(report: AnalysisReport) -> str:
+    """返回报告顶部的数据可信水印（Markdown）；无受限数据则返回空串。
+
+    这是「硬门禁」的可见层：任何合成/缓存/部分/低可信数据都会在报告最
+    上方以醒目横幅标红，确保用户不会被「看起来专业」的结论误导。
+    """
+    verdict = evaluate_trust(report.data_lineage, "report")
+    if not verdict.reasons:
+        return ""
+    lines = [
+        "> ⚠️ **数据可信水印 (Data Trust Watermark)**",
+    ]
+    for reason in verdict.reasons:
+        lines.append(f"> - {reason}")
+    lines.append(">")
+    lines.append("> 以上结论**不构成任何投资建议**；请勿据此直接交易。")
+    return "\n".join(lines) + "\n"
+
+
 def render_markdown(report: AnalysisReport) -> str:
     """渲染为 Markdown 报告"""
     r = report.risk_result
@@ -106,8 +126,13 @@ def render_markdown(report: AnalysisReport) -> str:
     conf = _fmt_pct(r.confidence if r else 0.0)
     pos = _fmt_pct(r.metrics.get("position", 0.0) if r else 0.0)
 
+    watermark = _trust_watermark(report)
     banner = _no_data_banner(report)
-    parts = [
+    parts: list[str] = []
+    if watermark:
+        parts.append(watermark)
+        parts.append("")
+    parts += [
         f"# 量化分析报告 — {report.stock_code}",
         "",
         f"> 生成时间: {report.timestamp}",
@@ -198,7 +223,17 @@ def render_markdown(report: AnalysisReport) -> str:
 def render_html(report: AnalysisReport) -> str:
     """渲染为自包含 HTML 报告（含基础样式）"""
     md = render_markdown(report)
-    out: list[str] = ['<div class="report">']
+    # 红色可信水印（HTML 顶部醒目横幅，对应 Markdown 的水印块）
+    verdict = evaluate_trust(report.data_lineage, "report")
+    banner = ""
+    if verdict.reasons:
+        items = "".join(f"<li>{html.escape(r)}</li>" for r in verdict.reasons)
+        banner = (
+            '<div class="watermark" role="alert">'
+            "<strong>⚠️ 数据可信水印</strong>：本报告基于受限/合成数据，"
+            f"不构成投资建议。<ul>{items}</ul></div>"
+        )
+    out: list[str] = [banner, '<div class="report">']
     for line in md.splitlines():
         if line.startswith("# "):
             out.append(f"<h1>{html.escape(line[2:])}</h1>")
@@ -225,6 +260,11 @@ def render_html(report: AnalysisReport) -> str:
         ".report h2{margin-top:1.6rem;color:#2563eb;}"
         ".report blockquote{background:#f1f5f9;padding:.5rem 1rem;border-left:4px solid #94a3b8;}"
         ".report li{margin:.2rem 0;}"
+        ".watermark{background:#fef2f2;color:#991b1b;border:1px solid #fecaca;"
+        "border-left:6px solid #dc2626;padding:.75rem 1rem;margin:1rem 0;border-radius:6px;}"
+        ".watermark strong{display:block;margin-bottom:.25rem;}"
+        ".watermark ul{margin:.25rem 0 0;padding-left:1.2rem;}"
+        ".watermark li{margin:.15rem 0;}"
         "</style>"
     )
     return (

@@ -8,8 +8,10 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from ..data.gate import DataTrustError, evaluate_trust
 from ..portfolio import CommissionModel, Portfolio, Trade, round_shares
 from ..strategy.strategy import Strategy, StrategyContext
+from .walk_forward import validate_point_in_time
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +61,10 @@ class BacktestResult:
     equity_curve: list[float] = field(default_factory=list)
     trades: list[Trade] = field(default_factory=list)
 
+    # 可信度审计（推荐 #4）：记录回测所依赖的数据前提，便于复盘与监管
+    adjust: str = "qfq"  # 复权方式：qfq（前复权）/ hfq（后复权）/ none
+    point_in_time_issues: list[str] = field(default_factory=list)
+
     def summary(self) -> str:
         return (
             f"Total return: {self.total_return:.2%} | Annualized: {self.annual_return:.2%} | "
@@ -78,6 +84,7 @@ class BacktestEngine:
         slippage: SlippageModel | None = None,
         strategy: Strategy | None = None,
         enforce_t_plus_one: bool = False,
+        adjust: str = "qfq",
     ):
         self.initial_capital = initial_capital
         self.commission = commission or CommissionModel()
@@ -85,6 +92,8 @@ class BacktestEngine:
         self.strategy = strategy
         # P1.4: T+1 规则 — 当日买入的股票次日才能卖出（默认关闭以兼容旧回测）
         self.enforce_t_plus_one = enforce_t_plus_one
+        # 复权方式（推荐 #4）：记录回测所依赖的价格基准，便于可信度审计
+        self.adjust = adjust
 
     def run(
         self,
@@ -93,6 +102,8 @@ class BacktestEngine:
         benchmark: pd.Series | None = None,
         strategy: Strategy | None = None,
         enforce_t_plus_one: bool | None = None,
+        provenance: list | None = None,
+        adjust: str | None = None,
     ) -> BacktestResult:
         """Run backtest.
 
@@ -106,16 +117,36 @@ class BacktestEngine:
                       as the live pipeline, decoupling signal logic from the
                       trade simulator.  (e.g. ``CrossOverStrategy`` for a momentum
                       backtest, or a custom strategy.)
+            provenance: 可选数据谱系列表（``DataProvenance``）。当提供且命中
+                合成样例/低可信度时，回测被硬门禁拦截（推荐 #2），避免受限
+                数据污染回测绩效。不提供时维持旧行为（兼容单测/脚本）。
 
         Returns:
             BacktestResult
+
+        Raises:
+            DataTrustError: provenance 命中硬门禁时。
         """
+        # 数据可信门禁（推荐 #2）：合成/低可信度数据禁止污染回测绩效
+        if provenance is not None:
+            try:
+                evaluate_trust(provenance, "backtest").require()
+            except DataTrustError as e:
+                raise DataTrustError(f"回测被数据可信门禁拦截: {e}") from e
+
+        # 复权方式与 point-in-time 校验（推荐 #4）：记录回测前提，作为可信度审计
+        adjust_used = adjust or self.adjust
+        pit_issues = validate_point_in_time(price_data, signals)
+        if pit_issues:
+            for issue in pit_issues:
+                logger.warning("point-in-time 校验告警: %s", issue)
+
         active_strategy = strategy or self.strategy
         if price_data.empty:
-            return BacktestResult()
+            return BacktestResult(adjust=adjust_used, point_in_time_issues=pit_issues)
         if active_strategy is None and signals is None:
             logger.warning("Backtest requires either `signals` or a `strategy`")
-            return BacktestResult()
+            return BacktestResult(adjust=adjust_used, point_in_time_issues=pit_issues)
 
         # P1.4: T+1 强制开关（run 级覆盖实例级）
         t_plus_one = self.enforce_t_plus_one if enforce_t_plus_one is None else enforce_t_plus_one
@@ -188,7 +219,10 @@ class BacktestEngine:
             portfolio.sell(stock_code, last_price, pos.shares)
             portfolio.record_equity()
 
-        return self._calculate_metrics(portfolio, benchmark)
+        result = self._calculate_metrics(portfolio, benchmark)
+        result.adjust = adjust_used
+        result.point_in_time_issues = pit_issues
+        return result
 
     def _calculate_metrics(
         self, portfolio: Portfolio, benchmark: pd.Series | None = None
