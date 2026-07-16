@@ -82,8 +82,7 @@ def validate_point_in_time(
     if signals is not None:
         if len(signals) > len(price_data):
             issues.append(
-                f"signals 长度({len(signals)})超过价格数据({len(price_data)})，"
-                "可能存在前视泄漏"
+                f"signals 长度({len(signals)})超过价格数据({len(price_data)})，可能存在前视泄漏"
             )
         if int(signals.isna().sum()) > 0:
             issues.append(f"signals 含 {int(signals.isna().sum())} 个 NaN（未对齐/缺失）")
@@ -182,6 +181,7 @@ class WalkForwardValidator:
         step: int | None = None,
         benchmark: pd.Series | None = None,
         provenance: list | None = None,
+        research_mode: bool = False,
     ) -> WalkForwardReport:
         """执行 walk-forward 验证。
 
@@ -190,6 +190,8 @@ class WalkForwardValidator:
             train_size / test_size / step: 见 :func:`walk_forward_splits`。
             benchmark: 可选基准序列（按时间升序，长度需覆盖测试窗口）。
             provenance: 可选数据谱系；命中硬门禁时回测会被拦截（推荐 #2）。
+            research_mode: 显式研究模式，透传给每折 ``engine.run``；缺谱系时
+                仅此模式可豁免 fail closed（推荐 #2）。
 
         Returns:
             WalkForwardReport
@@ -202,18 +204,22 @@ class WalkForwardValidator:
             sig_train = self.signal_fn(train_pd)
             sig_test = self.signal_fn(test_pd)
 
-            bench_train = (
-                benchmark.iloc[list(train_idx)] if benchmark is not None else None
-            )
-            bench_test = (
-                benchmark.iloc[list(test_idx)] if benchmark is not None else None
-            )
+            bench_train = benchmark.iloc[list(train_idx)] if benchmark is not None else None
+            bench_test = benchmark.iloc[list(test_idx)] if benchmark is not None else None
 
             in_sample = self.engine.run(
-                train_pd, signals=sig_train, benchmark=bench_train, provenance=provenance
+                train_pd,
+                signals=sig_train,
+                benchmark=bench_train,
+                provenance=provenance,
+                research_mode=research_mode,
             )
             out_of_sample = self.engine.run(
-                test_pd, signals=sig_test, benchmark=bench_test, provenance=provenance
+                test_pd,
+                signals=sig_test,
+                benchmark=bench_test,
+                provenance=provenance,
+                research_mode=research_mode,
             )
             folds.append(
                 WalkForwardFold(

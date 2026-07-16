@@ -76,7 +76,7 @@ class TestMetricsCore:
         assert "# TYPE" in text
         assert "test_requests_total" in text
         # Prometheus 行格式：name{tag="v"} value
-        assert "path=\"/api/health\"" in text
+        assert 'path="/api/health"' in text
 
 
 class TestAlertsCore:

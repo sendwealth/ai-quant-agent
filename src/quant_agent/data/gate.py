@@ -68,12 +68,16 @@ class TrustVerdict:
 def evaluate_trust(
     provenance: Iterable[DataProvenance] | None,
     purpose: str,
+    research_mode: bool = False,
 ) -> TrustVerdict:
     """评估一组数据的可信度是否满足给定用途。
 
     Args:
         provenance: 数据谱系列表（可为空）。
         purpose: 用途，取值 ``trading`` / ``backtest`` / ``report`` / ``screen``。
+        research_mode: 是否处于显式研究模式。仅当决策用途（``trading`` /
+            ``backtest``）**缺少数据谱系**时生效：开启后允许执行但显著标红，
+            关闭（默认）则 fail closed —— 缺谱系即禁止进入交易/正式回测。
 
     Returns:
         TrustVerdict
@@ -83,22 +87,48 @@ def evaluate_trust(
     - 决策用途（``trading`` / ``backtest``）下，出现 ``sample`` 来源或
       ``low`` 可信度 → ``allowed=False``，调用 :meth:`TrustVerdict.require`
       会抛 :class:`DataTrustError`。
+    - 决策用途下**缺少数据谱系**（空 ``provenance``）：默认 fail closed
+      （``allowed=False``）；仅当显式 ``research_mode=True`` 时放行并标红。
     - 只读用途下，同样数据 ``allowed=True``，但 ``reasons`` 会记录显著警示，
       供报告水印标红。
-    - 无谱系信息时，无法验证，默认放行（兼容旧回测/脚本），但记录原因。
     """
     provs = list(provenance or [])
     is_decision = purpose in DECISION_PURPOSES
 
     if not provs:
-        # 无谱系：无法验证；默认放行以免破坏既有回测脚本，但显式提示。
+        # 无谱系：决策用途 fail closed，除非显式研究模式豁免。
+        if is_decision:
+            if research_mode:
+                return TrustVerdict(
+                    allowed=True,
+                    purpose=purpose,
+                    level="unknown",
+                    sources=[],
+                    confidence=[],
+                    reasons=[
+                        "研究模式豁免：未提供数据谱系，"
+                        f"{purpose} 结果仅供研究参考，不构成任何决策依据"
+                    ],
+                )
+            return TrustVerdict(
+                allowed=False,
+                purpose=purpose,
+                level="unknown",
+                sources=[],
+                confidence=[],
+                reasons=[
+                    "未提供数据谱系，fail closed："
+                    f"{purpose} 默认拒绝执行；如需研究豁免请显式开启 research_mode"
+                ],
+            )
+        # 只读用途：放行但显著标记
         return TrustVerdict(
             allowed=True,
             purpose=purpose,
             level="unknown",
             sources=[],
             confidence=[],
-            reasons=["未提供数据谱系，无法验证可信度（建议仅用于研究/模拟）"],
+            reasons=["未提供数据谱系，无法验证可信度（仅供研究/只读参考）"],
         )
 
     reasons: list[str] = []

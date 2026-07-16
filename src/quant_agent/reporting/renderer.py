@@ -189,7 +189,9 @@ def render_markdown(report: AnalysisReport) -> str:
     if report.data_lineage:
         parts.append("## 数据来源 (Data Lineage)")
         parts.append("")
-        parts.append("| 类型 | 来源 | 获取时间 | 可信度 | 交易日 | 复权 | 缓存年龄 | 缺失字段 | 指纹 |")
+        parts.append(
+            "| 类型 | 来源 | 获取时间 | 可信度 | 交易日 | 复权 | 缓存年龄 | 缺失字段 | 指纹 |"
+        )
         parts.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
         for prov in report.data_lineage:
             d = prov.to_dict() if hasattr(prov, "to_dict") else prov

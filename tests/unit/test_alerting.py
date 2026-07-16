@@ -38,7 +38,9 @@ class TestAlertRules:
     def test_component_ok_no_alert(self):
         report = {
             "degraded": False,
-            "components": [{"name": "datasource:akshare", "ok": True, "degraded": False, "detail": ""}],
+            "components": [
+                {"name": "datasource:akshare", "ok": True, "degraded": False, "detail": ""}
+            ],
         }
         assert component_down_rule(report) is None
 

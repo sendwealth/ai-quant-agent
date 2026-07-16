@@ -46,11 +46,18 @@ class TradingService:
         report: AnalysisReport,
         analysis_results,
         current_date: str | None = None,
+        research_mode: bool = False,
     ) -> Order | None:
-        """根据报告里的共识信号显式下单。返回成交订单（若无则为 None）。"""
-        # 数据可信门禁（推荐 #2）：合成/低可信度数据禁止进入交易决策。
+        """根据报告里的共识信号显式下单。返回成交订单（若无则为 None）。
+
+        Args:
+            research_mode: 显式研究模式。仅当报告**无数据谱系**时生效：开启后
+                允许继续（仅用于研究/模拟），关闭（默认）则 fail closed —— 缺
+                谱系即禁止进入交易决策路径。
+        """
+        # 数据可信门禁（推荐 #2）：合成/低可信度数据、或无谱系数据禁止进入交易决策。
         try:
-            evaluate_trust(report.data_lineage, "trading").require()
+            evaluate_trust(report.data_lineage, "trading", research_mode=research_mode).require()
         except DataTrustError as e:
             logger.warning("交易被数据可信门禁拦截: %s", e)
             return None

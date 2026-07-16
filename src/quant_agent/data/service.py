@@ -111,9 +111,7 @@ class DataService:
         CI 触发；任何单源异常都不会扩散（由 :func:`smoke_test_source`
         捕获并计入 ``failed``）。
         """
-        results = [
-            smoke_test_source(s, stock_code=stock_code, days=days) for s in self._sources
-        ]
+        results = [smoke_test_source(s, stock_code=stock_code, days=days) for s in self._sources]
         return smoke_report(results)
 
     # ── 行情数据 ──

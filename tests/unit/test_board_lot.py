@@ -21,7 +21,7 @@ class TestBoardLotRounding:
             initial_capital=100000,
             slippage=SlippageModel(basis_points=0.0),
         )
-        result = engine.run(price_data, signals)
+        result = engine.run(price_data, signals, research_mode=True)
 
         # All trades must have shares in multiples of 100
         for trade in result.trades:
@@ -40,7 +40,7 @@ class TestBoardLotRounding:
         signals = pd.Series([1, 1, 1, 1, 1])
 
         engine = BacktestEngine(initial_capital=100000)
-        result = engine.run(price_data, signals)
+        result = engine.run(price_data, signals, research_mode=True)
 
         for trade in result.trades:
             if trade.direction == "buy":

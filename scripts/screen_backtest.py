@@ -240,7 +240,7 @@ def main(top_n=10, strategy_name="双均线EMA12/60", use_all_stocks=False):
         if df is None:
             continue
         signals = strategy_fn(df)
-        r = engine.run(df, signals)
+        r = engine.run(df, signals, research_mode=True)
         results.append({"code": code, "price": s["price"], "score": s["score"],
                         **{k: getattr(r, k) for k in [
                             "total_return", "annual_return", "max_drawdown", "sharpe_ratio",

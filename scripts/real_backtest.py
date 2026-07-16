@@ -133,7 +133,7 @@ def run_backtest():
                 for w in assumptions.warnings():
                     print(f"  ⚠️ [{code}] 假设警告: {w}")
 
-                result = engine.run(df, signals)
+                result = engine.run(df, signals, research_mode=True)
 
                 # P1.3: 构造本次运行的清单
                 manifest = build_manifest(

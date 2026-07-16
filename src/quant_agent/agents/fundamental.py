@@ -80,7 +80,9 @@ class FundamentalAgent(BaseAgent):
         if self.data_service is None:
             self._logger.warning("未配置 DataService")
             return None
-        return cast("FinancialSnapshot | None", self.data_service.get_financial_snapshot(stock_code))
+        return cast(
+            "FinancialSnapshot | None", self.data_service.get_financial_snapshot(stock_code)
+        )
 
     def _calc_scores(self, s: FinancialSnapshot) -> dict[str, Any]:
         """计算各项评分"""

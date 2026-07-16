@@ -22,6 +22,7 @@ from quant_agent.backtest.manifest import (
 
 # ── P1.3 manifest ──────────────────────────────────────────────────────────
 
+
 def test_build_manifest_includes_env_fingerprint():
     m = build_manifest(
         strategy_name="dual_ema",
@@ -30,8 +31,12 @@ def test_build_manifest_includes_env_fingerprint():
         data_hash="deadbeef",
         benchmark="buy&hold",
         execution_assumptions={"t_plus_one_enforced": False},
-        env={"git_sha": "abc", "uv_lock_fingerprint": "def", "python_version": "3.12",
-             "package_version": "3.1.0"},
+        env={
+            "git_sha": "abc",
+            "uv_lock_fingerprint": "def",
+            "python_version": "3.12",
+            "package_version": "3.1.0",
+        },
     )
     assert m.strategy_name == "dual_ema"
     assert m.seed == 42
@@ -63,6 +68,7 @@ def test_manifest_from_dict_ignores_unknown_keys():
 
 
 # ── P1.4 assumption guards ───────────────────────────────────────────────────
+
 
 def _df(dates, closes, highs=None, lows=None, volumes=None):
     data = {"date": dates, "close": closes}
@@ -132,12 +138,15 @@ def test_report_serializes():
 
 # ── P1.4 engine T+1 enforcement ──────────────────────────────────────────────
 
+
 def _prices():
     # 买入后立刻卖出信号：bar0 买, bar1 卖
-    return pd.DataFrame({
-        "date": ["20250102", "20250103", "20250106", "20250107"],
-        "close": [100.0, 110.0, 110.0, 110.0],
-    })
+    return pd.DataFrame(
+        {
+            "date": ["20250102", "20250103", "20250106", "20250107"],
+            "close": [100.0, 110.0, 110.0, 110.0],
+        }
+    )
 
 
 def test_t_plus_one_flag_accepted_daily_noop():
@@ -149,11 +158,9 @@ def test_t_plus_one_flag_accepted_daily_noop():
     df = _prices()
     signals = pd.Series([1, -1, 0, 0])
     eng_off = BacktestEngine(slippage=SlippageModel(basis_points=0.0))
-    r_off = eng_off.run(df, signals)
-    eng_on = BacktestEngine(
-        slippage=SlippageModel(basis_points=0.0), enforce_t_plus_one=True
-    )
-    r_on = eng_on.run(df, signals)
+    r_off = eng_off.run(df, signals, research_mode=True)
+    eng_on = BacktestEngine(slippage=SlippageModel(basis_points=0.0), enforce_t_plus_one=True)
+    r_on = eng_on.run(df, signals, research_mode=True)
     assert r_off.total_trades >= 1
     assert r_on.total_trades >= 1
     # 日频下 T+1 不应改变结果

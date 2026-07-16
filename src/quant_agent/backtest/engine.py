@@ -104,6 +104,7 @@ class BacktestEngine:
         enforce_t_plus_one: bool | None = None,
         provenance: list | None = None,
         adjust: str | None = None,
+        research_mode: bool = False,
     ) -> BacktestResult:
         """Run backtest.
 
@@ -117,22 +118,25 @@ class BacktestEngine:
                       as the live pipeline, decoupling signal logic from the
                       trade simulator.  (e.g. ``CrossOverStrategy`` for a momentum
                       backtest, or a custom strategy.)
-            provenance: 可选数据谱系列表（``DataProvenance``）。当提供且命中
-                合成样例/低可信度时，回测被硬门禁拦截（推荐 #2），避免受限
-                数据污染回测绩效。不提供时维持旧行为（兼容单测/脚本）。
+            provenance: 可选数据谱系列表（``DataProvenance``）。命中合成样例/低
+                可信度时，回测被硬门禁拦截（推荐 #2），避免受限数据污染回测绩效。
+                缺谱系时默认 fail closed（决策用途），仅显式 ``research_mode``
+                可豁免。
+            research_mode: 显式研究模式。仅当 ``provenance`` 为空时生效：开启后
+                允许回测（仅供研究），关闭（默认）则缺谱系即拦截。
 
         Returns:
             BacktestResult
 
         Raises:
-            DataTrustError: provenance 命中硬门禁时。
+            DataTrustError: provenance 命中硬门禁，或缺谱系且非研究模式时。
         """
-        # 数据可信门禁（推荐 #2）：合成/低可信度数据禁止污染回测绩效
-        if provenance is not None:
-            try:
-                evaluate_trust(provenance, "backtest").require()
-            except DataTrustError as e:
-                raise DataTrustError(f"回测被数据可信门禁拦截: {e}") from e
+        # 数据可信门禁（推荐 #2）：合成/低可信度数据禁止污染回测绩效；
+        # 缺谱系默认 fail closed（决策用途），仅显式研究模式可豁免。
+        try:
+            evaluate_trust(provenance, "backtest", research_mode=research_mode).require()
+        except DataTrustError as e:
+            raise DataTrustError(f"回测被数据可信门禁拦截: {e}") from e
 
         # 复权方式与 point-in-time 校验（推荐 #4）：记录回测前提，作为可信度审计
         adjust_used = adjust or self.adjust

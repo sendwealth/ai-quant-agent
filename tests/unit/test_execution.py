@@ -72,7 +72,9 @@ class TestOrderStateMachine:
 
     def test_pending_to_rejected_records_reason(self):
         o = Order.create("300750", OrderSide.BUY, 100, 10.0)
-        o.transition(OrderStatus.REJECTED, reason=RejectionReason.INSUFFICIENT_CASH, detail="no cash")
+        o.transition(
+            OrderStatus.REJECTED, reason=RejectionReason.INSUFFICIENT_CASH, detail="no cash"
+        )
         assert o.is_rejected()
         assert o.rejection_reason is RejectionReason.INSUFFICIENT_CASH
         assert o.rejection_detail == "no cash"
@@ -164,18 +166,14 @@ class TestEnforcement:
         assert trade2 is not None
 
     def test_t_plus_one_rejects_same_day_sell(self, tmp_path: Path):
-        svc = PaperTradingService(
-            str(tmp_path), initial_capital=100_000, enforce_t_plus_one=True
-        )
+        svc = PaperTradingService(str(tmp_path), initial_capital=100_000, enforce_t_plus_one=True)
         svc.buy("300750", 100.0, 200, trading_day="2024-01-02")
         order = svc.submit_order("300750", "SELL", 200, 110.0, trading_day="2024-01-02")
         assert order.is_rejected()
         assert order.rejection_reason is RejectionReason.T_PLUS_ONE
 
     def test_t_plus_one_allows_next_day_sell(self, tmp_path: Path):
-        svc = PaperTradingService(
-            str(tmp_path), initial_capital=100_000, enforce_t_plus_one=True
-        )
+        svc = PaperTradingService(str(tmp_path), initial_capital=100_000, enforce_t_plus_one=True)
         svc.buy("300750", 100.0, 200, trading_day="2024-01-02")
         order = svc.submit_order("300750", "SELL", 200, 110.0, trading_day="2024-01-03")
         assert order.is_filled()
@@ -256,9 +254,7 @@ class TestIdempotency:
 
     def test_idempotency_survives_restart(self, tmp_path: Path):
         svc = PaperTradingService(str(tmp_path), initial_capital=100_000)
-        svc.submit_order(
-            "300750", "BUY", 100, 100.0, idempotency_key="k", trading_day="2024-01-02"
-        )
+        svc.submit_order("300750", "BUY", 100, 100.0, idempotency_key="k", trading_day="2024-01-02")
         svc2 = PaperTradingService(str(tmp_path), initial_capital=100_000)
         o2 = svc2.submit_order(
             "300750", "BUY", 100, 100.0, idempotency_key="k", trading_day="2024-01-02"

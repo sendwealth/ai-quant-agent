@@ -280,7 +280,7 @@ class TestBullishPipeline:
             price_data=make_uptrend_price_df(),
             financial_snapshot=make_strong_financial_snapshot(),
         )
-        report = orch.analyze("300750")
+        report = orch.analyze("300750", research_mode=True)
 
         # A BUY with position > 0 and a valid current_price should open a
         # position in the execution agent's portfolio.

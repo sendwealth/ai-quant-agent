@@ -148,9 +148,7 @@ class TestAtomicWrites:
         svc.save_state()
 
         conn = sqlite3.connect(str(svc._store.db_path))
-        row = conn.execute(
-            "SELECT value FROM meta WHERE key='schema_version'"
-        ).fetchone()
+        row = conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
         conn.close()
         assert row is not None
         assert int(row[0]) >= 1

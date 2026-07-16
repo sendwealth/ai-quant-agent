@@ -104,7 +104,5 @@ def smoke_report(results: list[SourceSmokeResult]) -> dict[str, Any]:
         "results": [r.to_dict() for r in results],
         # 数据源健康评分（推荐 #3）：把冒烟结果量化为可机读分数，供 CI 告警与
         # 健康端点消费，而不只是文本/artifact。
-        "data_health_score": compute_data_health_score(
-            {"results": [r.to_dict() for r in results]}
-        ),
+        "data_health_score": compute_data_health_score({"results": [r.to_dict() for r in results]}),
     }

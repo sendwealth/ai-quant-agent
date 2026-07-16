@@ -93,19 +93,21 @@ class TestPointInTime:
 class TestEngineCredibility:
     def test_adjust_recorded(self):
         eng = BacktestEngine(initial_capital=100000, adjust="hfq")
-        res = eng.run(_price_data(20), signals=_signals(_price_data(20)))
+        res = eng.run(_price_data(20), signals=_signals(_price_data(20)), research_mode=True)
         assert res.adjust == "hfq"
 
     def test_adjust_override_in_run(self):
         eng = BacktestEngine(initial_capital=100000, adjust="qfq")
-        res = eng.run(_price_data(20), signals=_signals(_price_data(20)), adjust="none")
+        res = eng.run(
+            _price_data(20), signals=_signals(_price_data(20)), adjust="none", research_mode=True
+        )
         assert res.adjust == "none"
 
     def test_pit_issues_recorded(self):
         eng = BacktestEngine(initial_capital=100000)
         df = _price_data(10)
         long_sig = pd.Series(np.ones(15, dtype=int))
-        res = eng.run(df, signals=long_sig)
+        res = eng.run(df, signals=long_sig, research_mode=True)
         assert res.point_in_time_issues  # 记录了前视问题
         assert any("前视泄漏" in i for i in res.point_in_time_issues)
 
@@ -115,7 +117,7 @@ class TestWalkForwardValidator:
         eng = BacktestEngine(initial_capital=100000)
         df = _price_data(40)
         val = WalkForwardValidator(engine=eng, signal_fn=_signals)
-        report = val.run(df, train_size=12, test_size=6, step=6)
+        report = val.run(df, train_size=12, test_size=6, step=6, research_mode=True)
         assert report.n_folds >= 1
         # 每折测试区间都在训练区间之后（无泄漏）
         for fold in report.folds:
@@ -144,9 +146,17 @@ class TestWalkForwardValidator:
         with pytest.raises(DataTrustError):
             val.run(df, train_size=12, test_size=6, provenance=prov)
 
+    def test_walk_forward_blocks_without_provenance(self):
+        """walk-forward 缺谱系且非研究模式时，fail closed 拦截。"""
+        eng = BacktestEngine(initial_capital=100000)
+        df = _price_data(40)
+        val = WalkForwardValidator(engine=eng, signal_fn=_signals)
+        with pytest.raises(DataTrustError):
+            val.run(df, train_size=12, test_size=6)
+
     def test_summary_string(self):
         eng = BacktestEngine(initial_capital=100000)
         df = _price_data(40)
         val = WalkForwardValidator(engine=eng, signal_fn=_signals)
-        report = val.run(df, train_size=12, test_size=6, step=6)
+        report = val.run(df, train_size=12, test_size=6, step=6, research_mode=True)
         assert "walk-forward" in report.summary()

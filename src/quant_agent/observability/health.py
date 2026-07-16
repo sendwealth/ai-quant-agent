@@ -52,9 +52,7 @@ def compute_data_health_score(smoke_results: dict[str, Any] | None) -> dict[str,
     scored: dict[str, int | None] = {r.get("source"): score_source_result(r) for r in results}
     real = [sc for sc in scored.values() if sc is not None]
     overall = int(sum(real) / len(real)) if real else 0
-    failed_sources = [
-        r.get("source") for r in results if not r.get("ok") and not r.get("skipped")
-    ]
+    failed_sources = [r.get("source") for r in results if not r.get("ok") and not r.get("skipped")]
     return {
         "overall_score": overall,
         "healthy_count": sum(1 for r in results if r.get("ok")),

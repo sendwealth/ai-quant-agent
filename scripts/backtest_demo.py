@@ -100,7 +100,7 @@ def run_backtest(
     signals = generate_signals(df, strategy)
 
     # 运行回测
-    result = engine.run(df, signals)
+    result = engine.run(df, signals, research_mode=True)
 
     # 输出结果
     print("\n" + "=" * 60)

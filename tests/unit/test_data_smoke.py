@@ -102,9 +102,7 @@ def test_smoke_report_aggregation():
             error="boom",
             skipped=False,
         ),
-        SourceSmokeResult(
-            source="baostock", ok=False, skipped=True, skip_reason="no creds"
-        ),
+        SourceSmokeResult(source="baostock", ok=False, skipped=True, skip_reason="no creds"),
     ]
     rep = smoke_report(results)
     assert rep["total"] == 3
@@ -118,9 +116,7 @@ def test_smoke_report_aggregation():
 def test_smoke_report_degraded_when_none_healthy():
     results = [
         SourceSmokeResult(source="akshare", ok=False, error="boom", skipped=False),
-        SourceSmokeResult(
-            source="baostock", ok=False, skipped=True, skip_reason="no creds"
-        ),
+        SourceSmokeResult(source="baostock", ok=False, skipped=True, skip_reason="no creds"),
     ]
     rep = smoke_report(results)
     assert rep["degraded"] is True

@@ -50,6 +50,13 @@
 - **#2 数据可信门禁**：新增 `data/gate.py`（`evaluate_trust` / `DataTrustError`）。
   `sample`/`low` 数据被**硬阻断**进入交易与回测决策（`trading`/`backtest`），只读用途
   强制报告水印 + Web 红色警示横幅；`web/server.py` 暴露 `data_warning` 标志。
+- **#2 fail closed（缺谱系默认拒绝）**：`evaluate_trust` 对决策用途（``trading``/
+  ``backtest``）在**无数据谱系**时由「默认放行」改为 **fail closed**——缺谱系即禁止
+  执行（`allowed=False`），仅当显式传入 ``research_mode=True`` 时豁免（放行并标红，
+  不构成决策依据）。``TradingService.execute`` / ``BacktestEngine.run`` /
+  ``WalkForwardValidator.run`` / ``Orchestrator.analyze`` 均新增 ``research_mode``
+  透传参数；``Orchestrator`` 在数据执行前先汇总 ``data_lineage``，使门禁可校验谱系。
+  既有的引擎/回测单测与探索脚本统一标注 ``research_mode=True``。
 - **#3 数据源健康评分 + 告警**：`observability/health.py` 新增 `compute_data_health_score`
   （单源 0–100 + 整体聚合 + 失败源列表）；`observability/alerting.py` 新增
   `smoke_source_failure_rule`（真实失败源 critical）与 `data_health_score_rule`

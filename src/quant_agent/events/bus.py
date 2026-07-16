@@ -111,7 +111,9 @@ class EventBus:
             logger.debug(f"📤 {event} → {count} handlers")
         return count
 
-    def publish_simple(self, event_type: EventType, payload: dict | None = None, source: str = "") -> int:
+    def publish_simple(
+        self, event_type: EventType, payload: dict | None = None, source: str = ""
+    ) -> int:
         """便捷发布"""
         return self.publish(
             Event(

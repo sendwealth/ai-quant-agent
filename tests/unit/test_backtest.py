@@ -116,40 +116,40 @@ class TestSlippageModel:
 class TestBacktestEngine:
     def test_uptrend_buy(self, uptrend_data, buy_signals):
         engine = BacktestEngine(initial_capital=100000)
-        result = engine.run(uptrend_data, buy_signals)
+        result = engine.run(uptrend_data, buy_signals, research_mode=True)
         assert result.total_return > 0
         assert result.total_trades >= 1
 
     def test_downtrend_sell(self, downtrend_data, sell_signals):
         engine = BacktestEngine(initial_capital=100000)
-        result = engine.run(downtrend_data, sell_signals)
+        result = engine.run(downtrend_data, sell_signals, research_mode=True)
         # 卖出后不再持有，避免下跌
         assert isinstance(result, BacktestResult)
 
     def test_sharpe_positive_uptrend(self, uptrend_data, buy_signals):
         engine = BacktestEngine(initial_capital=100000)
-        result = engine.run(uptrend_data, buy_signals)
+        result = engine.run(uptrend_data, buy_signals, research_mode=True)
         assert result.sharpe_ratio > 0
 
     def test_max_drawdown_negative(self, uptrend_data, buy_signals):
         engine = BacktestEngine(initial_capital=100000)
-        result = engine.run(uptrend_data, buy_signals)
+        result = engine.run(uptrend_data, buy_signals, research_mode=True)
         assert result.max_drawdown <= 0
 
     def test_empty_data(self):
         engine = BacktestEngine()
-        result = engine.run(pd.DataFrame(), pd.Series([]))
+        result = engine.run(pd.DataFrame(), pd.Series([]), research_mode=True)
         assert result.total_return == 0
 
     def test_with_benchmark(self, uptrend_data, buy_signals):
         benchmark = uptrend_data["close"]
         engine = BacktestEngine()
-        result = engine.run(uptrend_data, buy_signals, benchmark=benchmark)
+        result = engine.run(uptrend_data, buy_signals, benchmark=benchmark, research_mode=True)
         assert result.benchmark_return != 0 or result.alpha == 0
 
     def test_result_summary(self, uptrend_data, buy_signals):
         engine = BacktestEngine()
-        result = engine.run(uptrend_data, buy_signals)
+        result = engine.run(uptrend_data, buy_signals, research_mode=True)
         s = result.summary()
         assert "Total return" in s or "总收益" in s
         assert "Sharpe" in s
@@ -158,7 +158,7 @@ class TestBacktestEngine:
         """买入并持有策略"""
         signals = pd.Series(1, index=range(len(uptrend_data)))
         engine = BacktestEngine()
-        result = engine.run(uptrend_data, signals)
+        result = engine.run(uptrend_data, signals, research_mode=True)
         assert result.total_return > 0
 
 
@@ -230,7 +230,7 @@ class TestKnownAnswerDeterministic:
             initial_capital=100000,
             slippage=SlippageModel(basis_points=0.0),
         )
-        result = engine.run(price_data, signals)
+        result = engine.run(price_data, signals, research_mode=True)
 
         expected_return = 108844.30 / 100000 - 1  # 0.088443
 
@@ -276,7 +276,7 @@ class TestKnownAnswerDeterministic:
             initial_capital=100000,
             slippage=SlippageModel(basis_points=0.0),
         )
-        result = engine.run(price_data, signals)
+        result = engine.run(price_data, signals, research_mode=True)
 
         # equity_curve[0] = 99973.0, equity_curve[-1] = 117832.60
         expected_return = 117832.60 / 99973.0 - 1
@@ -339,7 +339,7 @@ class TestKnownAnswerDeterministic:
             initial_capital=100000,
             slippage=SlippageModel(basis_points=0.0),
         )
-        result = engine.run(price_data, signals)
+        result = engine.run(price_data, signals, research_mode=True)
 
         expected_return = 105196.85 / 100000 - 1  # 0.0519685
 
@@ -384,7 +384,7 @@ class TestKnownAnswerDeterministic:
             initial_capital=10000,
             slippage=SlippageModel(basis_points=0.0),
         )
-        result = engine.run(price_data, signals)
+        result = engine.run(price_data, signals, research_mode=True)
 
         # equity_curve[0] = 9995.0, equity_curve[-1] = 11779.20
         expected_return = 11779.20 / 9995.0 - 1  # 0.17843...
@@ -431,7 +431,7 @@ class TestKnownAnswerDeterministic:
             initial_capital=100000,
             slippage=SlippageModel(basis_points=0.0),
         )
-        result = engine.run(price_data, signals)
+        result = engine.run(price_data, signals, research_mode=True)
 
         # equity_curve[0] = 99973.18, equity_curve[-1] = 106448.38
         expected_return = 106448.38 / 99973.18 - 1
@@ -473,7 +473,7 @@ class TestProfitFactorRegression:
             initial_capital=100000,
             slippage=SlippageModel(basis_points=0.0),
         )
-        result = engine.run(price_data, signals)
+        result = engine.run(price_data, signals, research_mode=True)
 
         # Verify formula: profit_factor = sum(wins) / abs(sum(losses))
         closed = [t for t in result.trades if t.status == "closed" and t.direction == "sell"]

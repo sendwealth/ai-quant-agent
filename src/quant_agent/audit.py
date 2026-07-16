@@ -96,9 +96,7 @@ class AuditLogger:
             "quantity": order.quantity,
             "price": order.price,
             "status": order.status.value,
-            "rejection_reason": order.rejection_reason.value
-            if order.rejection_reason
-            else None,
+            "rejection_reason": order.rejection_reason.value if order.rejection_reason else None,
             "rejection_detail": order.rejection_detail,
             "trading_day": order.trading_day,
             "filled_price": order.filled_price,

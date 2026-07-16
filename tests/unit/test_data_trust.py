@@ -80,11 +80,32 @@ def test_partial_confidence_warned_only():
     assert any("部分" in r for r in v.reasons)
 
 
-def test_empty_provenance_allowed_unknown():
+def test_empty_provenance_blocked_for_trading():
+    """决策用途缺谱系时 fail closed：默认拒绝执行。"""
     v = evaluate_trust([], "trading")
-    assert v.allowed is True
+    assert v.allowed is False
+    assert v.blocked is True
     assert v.level == "unknown"
-    assert v.reasons  # 仍提示「未提供数据谱系」
+    assert v.reasons  # fail closed 原因
+    with pytest.raises(DataTrustError):
+        v.require()
+
+
+def test_empty_provenance_research_exempt():
+    """显式研究模式可豁免缺谱系（仅放行并标红，不构成决策依据）。"""
+    v = evaluate_trust([], "trading", research_mode=True)
+    assert v.allowed is True
+    assert v.warning_text is not None
+    assert any("研究模式豁免" in r for r in v.reasons)
+
+
+def test_trading_research_exempt_on_empty_lineage():
+    """交易路径缺谱系时，显式研究模式可豁免（仅用于模拟，不下真实决策）。"""
+    fake = _FakeExec()
+    svc = TradingService(execution=fake, risk=_FakeRisk())
+    report = AnalysisReport(stock_code="600519", data_lineage=[])
+    # 不应抛 DataTrustError（研究模式豁免）
+    svc.execute(report, analysis_results=[], research_mode=True)
 
 
 def test_worst_confidence_selected():
@@ -160,9 +181,17 @@ def test_backtest_blocks_sample_provenance():
         )
 
 
-def test_backtest_runs_without_provenance():
+def test_backtest_blocks_without_provenance():
+    """正式回测缺谱系时 fail closed：默认拒绝执行。"""
     eng = BacktestEngine()
-    res = eng.run(_price_df(), signals=pd.Series([1, 0, 0]))
+    with pytest.raises(DataTrustError):
+        eng.run(_price_df(), signals=pd.Series([1, 0, 0]))
+
+
+def test_backtest_runs_without_provenance_in_research_mode():
+    """显式研究模式豁免缺谱系，回测照常运行。"""
+    eng = BacktestEngine()
+    res = eng.run(_price_df(), signals=pd.Series([1, 0, 0]), research_mode=True)
     assert res is not None
 
 

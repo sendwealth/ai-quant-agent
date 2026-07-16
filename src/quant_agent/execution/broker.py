@@ -45,9 +45,7 @@ def daily_limit_pct(stock_code: str) -> float:
     return _DEFAULT_LIMIT_PCT
 
 
-def price_within_limit(
-    prev_close: float, price: float, stock_code: str
-) -> bool:
+def price_within_limit(prev_close: float, price: float, stock_code: str) -> bool:
     """判定委托价是否落在当日涨跌停区间内（含边界）。
 
     Args:
@@ -94,9 +92,7 @@ class MarketCalendar:
     def require_tradable(self, dt: datetime, stock_code: str, suspended: bool) -> None:
         """硬约束检查：非交易时段 / 停牌 → 抛 :class:`MarketStateError`。"""
         if not self.is_trading_session(dt):
-            raise MarketStateError(
-                f"{stock_code} 不在交易时段（{dt.isoformat()}），禁止下单"
-            )
+            raise MarketStateError(f"{stock_code} 不在交易时段（{dt.isoformat()}），禁止下单")
         if suspended:
             raise MarketStateError(f"{stock_code} 处于停牌状态，禁止下单")
 
@@ -110,8 +106,8 @@ class OrderSide(str, Enum):
 
 
 class OrderType(str, Enum):
-    LIMIT = "limit"          # 限价
-    MARKET = "market"        # 市价（实盘需券商支持且谨慎使用）
+    LIMIT = "limit"  # 限价
+    MARKET = "market"  # 市价（实盘需券商支持且谨慎使用）
 
 
 @dataclass
@@ -141,9 +137,7 @@ class BrokerFill:
     timestamp: str = ""
 
 
-def make_idempotency_key(
-    stock_code: str, side: OrderSide, intent: str, day: str
-) -> str:
+def make_idempotency_key(stock_code: str, side: OrderSide, intent: str, day: str) -> str:
     """生成确定性幂等键。
 
     同一「股票 + 方向 + 意图 + 交易日」只会下发一次真实订单；重复提交（如
@@ -271,9 +265,7 @@ class OrderReconciler:
         remote_fills: list[BrokerFill],
     ) -> list[ReconcileMismatch]:
         by_key: dict[str, BrokerOrder] = {o.idempotency_key: o for o in local_orders}
-        remote_by_key: dict[str, BrokerFill] = {
-            f.idempotency_key: f for f in remote_fills
-        }
+        remote_by_key: dict[str, BrokerFill] = {f.idempotency_key: f for f in remote_fills}
         mismatches: list[ReconcileMismatch] = []
 
         for key, local in by_key.items():
@@ -304,8 +296,7 @@ class OrderReconciler:
                         idempotency_key=key,
                         stock_code=local.stock_code,
                         reason=(
-                            f"成交数量不符：本地 {local.quantity} / 券商 "
-                            f"{remote.filled_quantity}"
+                            f"成交数量不符：本地 {local.quantity} / 券商 {remote.filled_quantity}"
                         ),
                         local=local,
                         remote=remote,

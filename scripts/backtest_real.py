@@ -102,7 +102,7 @@ def run_backtest(stock_code: str, df: pd.DataFrame, strategy_name: str, strategy
         commission=CommissionModel(commission_rate=0.0003, stamp_tax_rate=0.001),
         slippage=SlippageModel(basis_points=1.0),
     )
-    result = engine.run(df, signals)
+    result = engine.run(df, signals, research_mode=True)
     return result
 
 

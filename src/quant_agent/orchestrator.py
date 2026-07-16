@@ -189,7 +189,13 @@ class Orchestrator:
         """Wrapper for batch analysis that propagates exceptions."""
         return self.analyze(code, days)
 
-    def analyze(self, stock_code: str, days: int = 120, execute: bool = True) -> AnalysisReport:
+    def analyze(
+        self,
+        stock_code: str,
+        days: int = 120,
+        execute: bool = True,
+        research_mode: bool = False,
+    ) -> AnalysisReport:
         """运行完整分析流水线
 
         Args:
@@ -198,6 +204,8 @@ class Orchestrator:
             execute: 是否根据共识信号显式下单。
                 默认 True（CLI/批量等显式操作）；Web 预览等只读场景应传 False，
                 避免「点一下分析就建仓」。
+            research_mode: 显式研究模式，透传给 :class:`TradingService`；仅当
+                报告**无数据谱系**时生效，用于模拟/测试场景的豁免。
 
         Returns:
             AnalysisReport 包含各 Agent 的分析结果
@@ -300,10 +308,16 @@ class Orchestrator:
                 except LLMError as e:
                     logger.warning("LLM 风险解读失败: %s", e)
 
+            # e2. 数据谱系：先汇总本次分析所依赖数据的来源与时间（P3 透明展示），
+            # 必须在交易执行前完成，以便数据可信门禁（fail closed）可校验谱系。
+            report.data_lineage = self.data.get_lineage(stock_code)
+
             # d~e. 仅当显式要求时才执行交易（默认从 Web 预览入口为 False，
             # 避免「点一下分析就建仓」）。交易副作用全部交由 TradingService。
             if execute:
-                self.trading.execute(report, analysis_results, current_date)
+                self.trading.execute(
+                    report, analysis_results, current_date, research_mode=research_mode
+                )
                 if risk_result.signal in ("BUY", "SELL"):
                     self.notifier.send_trade_signal(report)
 
@@ -316,9 +330,6 @@ class Orchestrator:
         logger.info("  Cash: %.2f", summary["cash"])
         logger.info("  Position value: %.2f", summary["position_value"])
         logger.info("  Return: %.2f%%", summary["total_return"] * 100)
-
-        # e2. 数据谱系：汇总本次分析所依赖数据的来源与时间（P3 透明展示）
-        report.data_lineage = self.data.get_lineage(stock_code)
 
         # f. LLM 综合报告 (可选)
         if self.report_gen and self.llm and self.llm.enabled:

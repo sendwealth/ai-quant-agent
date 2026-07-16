@@ -130,17 +130,20 @@ class TestReconciliation:
     def test_unknown_remote(self):
         o = _order()
         other = _order(stock="000001")
-        mism = OrderReconciler().reconcile([o], [
-            BrokerFill(
-                broker_order_id="BX",
-                idempotency_key=other.idempotency_key,
-                stock_code=other.stock_code,
-                side=other.side,
-                filled_quantity=other.quantity,
-                filled_price=other.price or 0.0,
-                status="filled",
-            )
-        ])
+        mism = OrderReconciler().reconcile(
+            [o],
+            [
+                BrokerFill(
+                    broker_order_id="BX",
+                    idempotency_key=other.idempotency_key,
+                    stock_code=other.stock_code,
+                    side=other.side,
+                    filled_quantity=other.quantity,
+                    filled_price=other.price or 0.0,
+                    status="filled",
+                )
+            ],
+        )
         assert any("未知单" in m.reason for m in mism)
 
 
