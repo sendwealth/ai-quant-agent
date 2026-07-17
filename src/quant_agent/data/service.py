@@ -535,9 +535,7 @@ class DataService:
                     _, df = future.result(timeout=per_call_timeout)
                 except TimeoutError:
                     # 单只取数超时（某数据源卡死/无响应）：跳过，保证整批返回
-                    logger.warning(
-                        f"并发获取 {code} 超时（>{per_call_timeout:.0f}s），跳过"
-                    )
+                    logger.warning(f"并发获取 {code} 超时（>{per_call_timeout:.0f}s），跳过")
                     continue
                 except Exception as exc:  # noqa: BLE001
                     logger.warning(f"并发获取 {code} 异常: {exc}")

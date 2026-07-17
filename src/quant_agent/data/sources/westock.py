@@ -26,7 +26,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import shutil
 import subprocess
 import time
@@ -82,7 +81,7 @@ def from_westock_code(westock_code: str) -> str:
     code = westock_code.strip().lower()
     for p in ("sh", "sz", "bj"):
         if code.startswith(p):
-            return code[len(p):]
+            return code[len(p) :]
     return westock_code
 
 
@@ -131,7 +130,7 @@ def _parse_markdown_table(text: str) -> pd.DataFrame | None:
             cells = [c.strip() for c in row.strip("|").split("|")]
             if len(cells) != len(header):
                 continue
-            records.append(dict(zip(header, cells)))
+            records.append(dict(zip(header, cells, strict=False)))
         if records:
             return pd.DataFrame(records)
 
@@ -202,9 +201,7 @@ class WeStockSource(DataSource):
                 last_err = e
                 if attempt < self.max_retries:
                     wait = 2 ** (attempt - 1)
-                    logger.warning(
-                        f"WeStock CLI attempt {attempt} failed: {e}, retry in {wait}s"
-                    )
+                    logger.warning(f"WeStock CLI attempt {attempt} failed: {e}, retry in {wait}s")
                     time.sleep(wait)
             except Exception as e:
                 logger.warning(f"WeStock CLI non-transient error: {e}")
@@ -256,7 +253,11 @@ class WeStockSource(DataSource):
 
             df = df.dropna(subset=["close"]).sort_values("date").reset_index(drop=True)
             # 保留必要的标准列
-            keep = [c for c in ["date", "open", "high", "low", "close", "volume", "amount"] if c in df.columns]
+            keep = [
+                c
+                for c in ["date", "open", "high", "low", "close", "volume", "amount"]
+                if c in df.columns
+            ]
             df = df[keep]
             if df.empty:
                 return None
@@ -310,10 +311,12 @@ class WeStockSource(DataSource):
                     return None
 
             # 利润表字段 (A股)
-            revenue = _num(latest_lrb.get("OperatingRevenue")) or _num(latest_lrb.get("TotalOperatingRevenue"))
-            profit = _num(latest_lrb.get("NPParentCompanyOwners")) or _num(latest_lrb.get("NetProfit"))
-            op_profit = _num(latest_lrb.get("OperatingProfit"))
-            total_profit = _num(latest_lrb.get("TotalProfit"))
+            revenue = _num(latest_lrb.get("OperatingRevenue")) or _num(
+                latest_lrb.get("TotalOperatingRevenue")
+            )
+            profit = _num(latest_lrb.get("NPParentCompanyOwners")) or _num(
+                latest_lrb.get("NetProfit")
+            )
             total_cost = _num(latest_lrb.get("TotalOperatingCost"))
 
             if revenue and revenue > 0:
@@ -324,7 +327,9 @@ class WeStockSource(DataSource):
                     data["net_margin"] = profit / revenue
 
             if latest_zcfz is not None:
-                equity = _num(latest_zcfz.get("TotalOwnerEquity")) or _num(latest_zcfz.get("SEWithoutMI"))
+                equity = _num(latest_zcfz.get("TotalOwnerEquity")) or _num(
+                    latest_zcfz.get("SEWithoutMI")
+                )
                 total_assets = _num(latest_zcfz.get("TotalAssets"))
                 total_liab = _num(latest_zcfz.get("TotalLiabilities"))
                 if equity and equity > 0 and profit is not None:

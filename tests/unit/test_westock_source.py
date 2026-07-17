@@ -14,7 +14,6 @@ from quant_agent.data.sources.westock import (
     to_westock_code,
 )
 
-
 # ── Helpers ──
 
 _KLINE_MD = """
@@ -156,7 +155,14 @@ class TestMarkdownParse:
         df = _parse_markdown_table(_KLINE_MD)
         assert df is not None
         assert list(df.columns) == [
-            "date", "open", "last", "high", "low", "volume", "amount", "exchange"
+            "date",
+            "open",
+            "last",
+            "high",
+            "low",
+            "volume",
+            "amount",
+            "exchange",
         ]
         assert len(df) == 2
         assert df.iloc[0]["last"] == "8.85"
@@ -252,9 +258,7 @@ class TestFinancialSnapshot:
     def test_snapshot_calculates_metrics(self):
         src = _create_source()
         # lrb 与 zcfz 交替返回
-        src._run_cli = MagicMock(
-            side_effect=[_FINANCE_LRB_MD, _FINANCE_ZCFZ_MD]
-        )
+        src._run_cli = MagicMock(side_effect=[_FINANCE_LRB_MD, _FINANCE_ZCFZ_MD])
         snap = src.get_financial_snapshot("600000")
         assert snap is not None
         # 毛利率 = (rev - cost) / rev
@@ -408,9 +412,7 @@ class TestDataServiceIntegration:
     def test_westock_in_sources_when_enabled(self):
         from quant_agent.data.service import DataService
 
-        with patch(
-            "quant_agent.data.sources.westock.WeStockSource"
-        ) as MockWs:
+        with patch("quant_agent.data.sources.westock.WeStockSource") as MockWs:
             mock_src = MagicMock()
             mock_src.available = True
             mock_src.name = "westock"

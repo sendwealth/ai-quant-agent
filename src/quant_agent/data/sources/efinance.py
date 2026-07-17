@@ -45,7 +45,7 @@ def _patch_efinance_timeout() -> None:
             if getattr(_orig, "_quant_timeout_patched", False):
                 continue
 
-            def _req(self, method, url, *args, **kwargs):
+            def _req(self, method, url, *args, _orig=_orig, **kwargs):
                 kwargs.setdefault("timeout", _EFINANCE_TIMEOUT)
                 return _orig(self, method, url, *args, **kwargs)
 
@@ -54,6 +54,7 @@ def _patch_efinance_timeout() -> None:
         _ef_timeout_patched = True
     except Exception:  # noqa: BLE001
         pass
+
 
 # Proxy keys to bypass for domestic API calls
 _PROXY_KEYS = ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "all_proxy")

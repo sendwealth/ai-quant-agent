@@ -379,9 +379,7 @@ class ScreeningEngine:
 
             # 3. Batch fetch price data
             self._logger.info("Fetching price data for %d stocks...", len(codes))
-            price_data = self.data.get_multi_price(
-                codes, days=days, time_budget=time_budget
-            )
+            price_data = self.data.get_multi_price(codes, days=days, time_budget=time_budget)
             self._logger.info("Fetched price data for %d stocks", len(price_data))
 
             # 4. Price/liquidity filter

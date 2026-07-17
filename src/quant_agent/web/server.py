@@ -500,8 +500,10 @@ class _Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 return
-            rel = "index.html" if path in ("", "/") else (
-                path[len("/static/") :] if path.startswith("/static/") else path
+            rel = (
+                "index.html"
+                if path in ("", "/")
+                else (path[len("/static/") :] if path.startswith("/static/") else path)
             )
             safe = Path(rel.lstrip("/"))
             full = (STATIC_DIR / safe).resolve()
