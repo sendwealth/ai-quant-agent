@@ -52,8 +52,8 @@ class AkshareSource(DataSource):
 
     def __init__(
         self,
-        timeout: int = 10,
-        max_retries: int = 3,
+        timeout: int = 8,
+        max_retries: int = 1,
         rate_limiter: RateLimiter | None = None,
     ):
         self.timeout = timeout

@@ -18,6 +18,43 @@ logger = logging.getLogger(__name__)
 # Only retry transient network/IO errors
 _RETRYABLE = (ConnectionError, TimeoutError, OSError)
 
+# 给 efinance 底层 requests 注入默认超时：受限网络下连接可能
+# 「静默挂起」（不返回也不 RST），而 efinance 未设请求超时，会导致
+# 工作线程永久阻塞，占满线程池并拖垮批量取数（智能选股卡死）。
+# 此处打一次补丁，让此类请求在超时后快速失败。
+_EFINANCE_TIMEOUT = 8
+_ef_timeout_patched = False
+
+
+def _patch_efinance_timeout() -> None:
+    """给 efinance 的 requests.Session 注入默认超时（仅生效一次）。"""
+    global _ef_timeout_patched
+    if _ef_timeout_patched:
+        return
+    try:
+        import efinance as ef
+
+        for _sess in (
+            getattr(ef, "session", None),
+            getattr(getattr(ef, "common", None), "getter", None)
+            and getattr(ef.common.getter, "session", None),
+        ):
+            if _sess is None:
+                continue
+            _orig = _sess.request
+            if getattr(_orig, "_quant_timeout_patched", False):
+                continue
+
+            def _req(self, method, url, *args, **kwargs):
+                kwargs.setdefault("timeout", _EFINANCE_TIMEOUT)
+                return _orig(self, method, url, *args, **kwargs)
+
+            _req._quant_timeout_patched = True  # type: ignore[attr-defined]
+            _sess.request = _req  # type: ignore[assignment]
+        _ef_timeout_patched = True
+    except Exception:  # noqa: BLE001
+        pass
+
 # Proxy keys to bypass for domestic API calls
 _PROXY_KEYS = ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "all_proxy")
 
@@ -88,7 +125,7 @@ class EfinanceSource(DataSource):
 
     def __init__(
         self,
-        max_retries: int = 3,
+        max_retries: int = 1,
         rate_limiter: RateLimiter | None = None,
     ):
         self.max_retries = max_retries
@@ -145,6 +182,7 @@ class EfinanceSource(DataSource):
         try:
             import efinance as ef
 
+            _patch_efinance_timeout()
             start_date = (datetime.now() - timedelta(days=int(days * 1.5))).strftime("%Y%m%d")
 
             # klt=101: daily, fqt: 1=qfq, 2=hfq, 0=none
