@@ -46,8 +46,10 @@ where = ["src"]
 
 # 内置演示样例（确定性合成数据，见 scripts/generate_demo_samples.py）随 wheel 发布，
 # 使 `pip install` 后离线兜底可用。
+# web/static 为前端静态资源，必须随包发布，否则 `python -m quant_agent.web.server`
+# 安装后启动时找不到静态文件（根路径 404）。
 [tool.setuptools.package-data]
-quant_agent = ["data/samples/**/*"]
+quant_agent = ["data/samples/**/*", "web/static/**/*", "data/stock_names.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit", "tests"]

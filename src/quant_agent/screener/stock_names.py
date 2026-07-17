@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import importlib.resources as importlib_resources
 import json
 import logging
 from pathlib import Path
@@ -198,19 +199,47 @@ BUILTIN_STOCK_NAME_MAP: dict[str, str] = {
 }
 
 # 全市场缓存文件（仓库内），``update_stock_names()`` 生成/刷新。
-# stock_names.py 位于 src/quant_agent/screener/，父级第 3 层即仓库根目录。
-_DEFAULT_CACHE = Path(__file__).resolve().parents[3] / "data" / "stock_names.json"
+#
+# 旧写法 ``Path(__file__).resolve().parents[3] / "data" / "stock_names.json"``
+# 仅对「源码布局」成立；``pip install .`` 后 ``__file__`` 落在 site-packages，
+# parents[3] 指向 Python 安装根，缓存文件找不到，只剩内嵌兜底（~150 只）。
+# 改为按优先级多路径查找（见 ``_load_cache``）：
+#   1. 当前工作区 data/stock_names.json（开发/部署目录，可写，优先）
+#   2. 随包发布的 data/stock_names.json（pip install 后的兜底）
+#   3. 源码布局启发式（仓库根 data/stock_names.json）
+#
+# 默认写入路径用工作区相对路径，保证 ``update_stock_names()`` 刷新后可见。
+_DEFAULT_CACHE = Path.cwd() / "data" / "stock_names.json"
+
+
+def _bundled_cache_path() -> Path | None:
+    """返回随包发布的 data/stock_names.json（若存在），否则 None。"""
+    try:
+        ref = importlib_resources.files("quant_agent") / "data" / "stock_names.json"
+        with importlib_resources.as_file(ref) as p:
+            return p if p.exists() else None
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _load_cache(path: Path = _DEFAULT_CACHE) -> dict[str, str]:
-    """加载 data/stock_names.json 全市场缓存；缺失/损坏则返回空字典。"""
-    try:
-        if path.exists():
-            data = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                return {str(k): str(v) for k, v in data.items()}
-    except Exception as e:  # noqa: BLE001
-        logger.warning("加载股票名称缓存失败 %s: %s", path, e)
+    """加载 data/stock_names.json 全市场缓存；缺失/损坏则返回空字典。
+
+    依次尝试：``path``（默认工作区相对）→ 随包发布 → 源码布局启发式。
+    """
+    candidates = [path]
+    bundled = _bundled_cache_path()
+    if bundled is not None:
+        candidates.append(bundled)
+    candidates.append(Path(__file__).resolve().parents[3] / "data" / "stock_names.json")
+    for c in candidates:
+        try:
+            if c.exists():
+                data = json.loads(c.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    return {str(k): str(v) for k, v in data.items()}
+        except Exception as e:  # noqa: BLE001
+            logger.warning("加载股票名称缓存失败 %s: %s", c, e)
     return {}
 
 

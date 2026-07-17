@@ -46,3 +46,6 @@ archive/
 data/archive/
 docs/archive/
 tests/archive/
+
+# IDE 工具工作数据（非源码）
+.codebuddy/
