@@ -49,6 +49,16 @@ def _fmt_missing(missing) -> str:
     return str(missing)
 
 
+def _dash(v) -> str:
+    """将 None 渲染为占位符 '-'；同时兼容缺失键。
+
+    注意：``to_dict()`` 对未设置的字段会返回 ``None``（键存在、值为 None），
+    此时 ``dict.get(key, '-')`` 不会回退（它只在键缺失时回退），会原样输出
+    字面量 "None"。此函数统一处理 None 与缺失键。
+    """
+    return "-" if v is None else str(v)
+
+
 def _agent_block(result: AgentResult | None, title: str) -> str:
     if result is None:
         return f"### {title}\n\n- 状态: 未运行\n"
@@ -68,7 +78,7 @@ def _agent_block(result: AgentResult | None, title: str) -> str:
         for k, v in result.metrics.items():
             if k in ("key_factors",):
                 continue
-            lines.append(f"- {k}: `{v}`")
+            lines.append(f"- {k}: `{_dash(v)}`")
     if not result.success and result.error:
         lines.append(f"- 错误: `{result.error}`")
     return "\n".join(lines) + "\n"
@@ -196,12 +206,12 @@ def render_markdown(report: AnalysisReport) -> str:
         for prov in report.data_lineage:
             d = prov.to_dict() if hasattr(prov, "to_dict") else prov
             parts.append(
-                f"| {d.get('data_type', '?')} | {d.get('source', '?')} "
-                f"| {d.get('fetched_at', '?')} | {d.get('confidence', '?')} "
-                f"| {d.get('trading_day', '-')} | {d.get('adjust_status', '-')} "
+                f"| {_dash(d.get('data_type', '-'))} | {_dash(d.get('source', '-'))} "
+                f"| {_dash(d.get('fetched_at', '-'))} | {_dash(d.get('confidence', '-'))} "
+                f"| {_dash(d.get('trading_day', '-'))} | {_dash(d.get('adjust_status', '-'))} "
                 f"| {_fmt_cache_age(d.get('cache_age_seconds'))} "
                 f"| {_fmt_missing(d.get('missing_fields'))} "
-                f"| {d.get('data_hash', '-')} |"
+                f"| {_dash(d.get('data_hash', '-'))} |"
             )
         parts.append("")
 

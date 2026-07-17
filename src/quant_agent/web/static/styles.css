@@ -142,6 +142,21 @@ input[type="number"] { width: 90px; }
 }
 .report-card p { white-space: pre-wrap; }
 
+/* Markdown 数据来源表（GFM 表格渲染） */
+.report-card table.md-table {
+  width: 100%; border-collapse: collapse; margin: 0.6rem 0 1rem;
+  font-size: 0.88rem; overflow: hidden; border-radius: 8px;
+}
+.report-card table.md-table th,
+.report-card table.md-table td {
+  text-align: left; padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.report-card table.md-table thead th {
+  background: #0b1220; color: var(--muted); font-weight: 600;
+}
+.report-card table.md-table tbody tr:hover td { background: #0b1220; }
+
 /* 数据可信警示横幅（推荐 #2 硬门禁可见层） */
 .watermark {
   background: #7f1d1d33; color: #fecaca; border: 1px solid #b91c1c;

@@ -29,12 +29,48 @@ function inline(s) {
 function renderMarkdown(md) {
   const lines = String(md || "").split("\n");
   const out = [];
+  let i = 0;
   let inList = false;
   const closeList = () => {
     if (inList) { out.push("</ul>"); inList = false; }
   };
-  for (const raw of lines) {
-    const line = raw.replace(/\s+$/, "");
+  // 解析表格行：去掉首尾的 | 后按 | 切分
+  const parseRow = (line) => {
+    let s = line.trim();
+    if (s.startsWith("|")) s = s.slice(1);
+    if (s.endsWith("|")) s = s.slice(0, -1);
+    return s.split("|").map((c) => c.trim());
+  };
+  // 分隔符行判定：每格均为 --- / :-- / --: 形式
+  const isSep = (cells) =>
+    cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c));
+  while (i < lines.length) {
+    const line = lines[i].replace(/\s+$/, "");
+    // 表格检测：当前行为表头，下一行为分隔符行
+    if (line.startsWith("|") && i + 1 < lines.length) {
+      const headerCells = parseRow(line);
+      const sepCells = parseRow(lines[i + 1]);
+      if (isSep(sepCells) && headerCells.length >= 1) {
+        const ncol = headerCells.length;
+        let html = '<table class="md-table"><thead><tr>';
+        html += headerCells.map((c) => `<th>${inline(c)}</th>`).join("");
+        html += "</tr></thead><tbody>";
+        i += 2; // 跳过表头 + 分隔符
+        while (i < lines.length) {
+          const rline = lines[i].replace(/\s+$/, "");
+          if (rline.trim() === "" || !rline.includes("|")) break;
+          const cells = parseRow(rline);
+          if (cells.length !== ncol) break;
+          html += "<tr>" + cells.map((c) => `<td>${inline(c)}</td>`).join("") + "</tr>";
+          i++;
+        }
+        html += "</tbody></table>";
+        closeList();
+        out.push(html);
+        continue;
+      }
+    }
+    // 普通块级渲染
     if (line.startsWith("### ")) {
       closeList(); out.push(`<h3>${inline(line.slice(4))}</h3>`);
     } else if (line.startsWith("## ")) {
@@ -51,6 +87,7 @@ function renderMarkdown(md) {
     } else {
       closeList(); out.push(`<p>${inline(line)}</p>`);
     }
+    i++;
   }
   closeList();
   return out.join("\n");
