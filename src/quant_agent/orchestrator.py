@@ -419,6 +419,7 @@ class Orchestrator:
         top_n: int = 10,
         include_fundamentals: bool = False,
         analyze_days: int = 120,
+        time_budget: float | None = None,
     ) -> tuple:
         """选股 + 深度分析一体化
 
@@ -441,6 +442,7 @@ class Orchestrator:
             top_n=top_n,
             include_fundamentals=include_fundamentals,
             days=analyze_days,
+            time_budget=time_budget,
         )
 
         if not screen_result.top_stocks:

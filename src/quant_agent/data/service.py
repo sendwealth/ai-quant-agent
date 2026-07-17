@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Any
@@ -463,6 +464,8 @@ class DataService:
         stock_codes: list[str],
         days: int = 250,
         max_workers: int | None = None,
+        per_call_timeout: float = 30.0,
+        time_budget: float | None = 90.0,
     ) -> dict[str, pd.DataFrame]:
         """批量获取行情（支持并发）
 
@@ -471,6 +474,13 @@ class DataService:
             days: 获取天数
             max_workers: 并发线程数，None 时使用 settings.fetch_max_workers，
                          1 时退化为顺序执行
+            per_call_timeout: 单只取数的超时上限（秒）。任一数据源卡死/
+                长时间无响应时，跳过该股票以保证整批一定返回，避免批量
+                取数（如智能选股对上百只股票）整体挂起。
+            time_budget: 整批取数的时间预算（秒）。超过预算后停止收集、
+                直接返回已拿到的结果，避免被限速的免费源（如 westock 60/min）
+                或返回空却耗时的坏源拖垮整批，使智能选股能「尽快出结果」。
+                None 表示不限制。
 
         Returns:
             dict[str, pd.DataFrame]: 成功获取的股票行情，失败的静默跳过
@@ -486,22 +496,57 @@ class DataService:
                     seq_results[code] = df
             return seq_results
 
-        # Concurrent execution
+        # Concurrent execution.
+        # 注意：不使用 \`with ThreadPoolExecutor\` 上下文管理器，因为它会在退出时
+        # 等待「所有」工作线程结束。若某个数据源请求无超时（如个别免费源在
+        # 受限网络下连接挂起），该线程会长时间甚至永久不退出，导致整批批量
+        # 取数卡死（智能选股对上百只股票会永久无响应）。改为显式
+        # \`shutdown(wait=False)\`：收集到已完成的结果后即返回，残留线程在其
+        # 各自源的超时/重试结束后自行退出，不阻塞整批。
         results: dict[str, pd.DataFrame] = {}
 
         def _fetch_one(code: str) -> tuple[str, pd.DataFrame | None]:
             try:
                 return code, self.get_price_data(code, days)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.warning(f"并发获取 {code} 异常: {exc}")
                 return code, None
 
-        with ThreadPoolExecutor(max_workers=workers) as executor:
+        executor = ThreadPoolExecutor(max_workers=workers)
+        start = time.monotonic()
+        try:
             futures = {executor.submit(_fetch_one, code): code for code in stock_codes}
             for future in as_completed(futures):
-                code, df = future.result()
+                # 时间预算：超过预算即停止收集，返回已拿到的结果。
+                # 关键修复：默认池有 179 只，Tushare 仅覆盖约 50 只，
+                # 其余降级到被限速的免费源（westock 60/min）或返回空却
+                # 耗时的坏源，整批可能永远跑不完。时间预算确保智能选股
+                # 「尽快出结果」而非永久卡死。
+                if time_budget is not None and (time.monotonic() - start) > time_budget:
+                    logger.warning(
+                        "批量取数达到时间预算 %.0fs，停止收集（已获取 %d/%d）",
+                        time_budget,
+                        len(results),
+                        len(stock_codes),
+                    )
+                    break
+                code = futures[future]
+                try:
+                    _, df = future.result(timeout=per_call_timeout)
+                except TimeoutError:
+                    # 单只取数超时（某数据源卡死/无响应）：跳过，保证整批返回
+                    logger.warning(
+                        f"并发获取 {code} 超时（>{per_call_timeout:.0f}s），跳过"
+                    )
+                    continue
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(f"并发获取 {code} 异常: {exc}")
+                    continue
                 if df is not None:
                     results[code] = df
+        finally:
+            # 不等待未完成线程（避免被卡死/限速的源拖垮整批）
+            executor.shutdown(wait=False)
 
         return results
 

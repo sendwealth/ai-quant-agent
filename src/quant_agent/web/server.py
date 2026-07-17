@@ -176,6 +176,11 @@ def screen_core(qs: dict) -> dict:
     fundamentals = qs.get("fundamentals", ["0"])[0] in ("1", "true", "True")
     deep = qs.get("deep", ["0"])[0] in ("1", "true", "True")
     offline = qs.get("offline", ["0"])[0] in ("1", "true", "True")
+    # Web 端时间预算：默认 30s，保证智能选股「尽快出结果」，
+    # 不被受限网络下被限速/返回空的免费源拖死（全池 179 只无法在
+    # 合理时间内取完）。Tushare 优先源约 14s 内即可覆盖 50 只，
+    # 足以支撑 top-10 选股。
+    time_budget = float(qs.get("budget", ["30"])[0] or 30)
 
     orch = _get_orchestrator(offline)
     if deep:
@@ -183,6 +188,7 @@ def screen_core(qs: dict) -> dict:
             use_full_market=full_scan,
             top_n=top,
             include_fundamentals=fundamentals,
+            time_budget=time_budget,
         )
         name_map = {s.stock_code: getattr(s, "name", None) or "" for s in screen_result.top_stocks}
         deep_reports = [
@@ -198,6 +204,7 @@ def screen_core(qs: dict) -> dict:
             use_full_market=full_scan,
             top_n=top,
             include_fundamentals=fundamentals,
+            time_budget=time_budget,
         )
         deep_reports = []
 
@@ -480,6 +487,41 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
+
+    def do_HEAD(self):
+        """响应 HEAD 探测（健康检查/预览探针），仅返回头部不返回主体。"""
+        parsed = urlparse(self.path)
+        path = parsed.path
+        try:
+            if path.startswith("/api/"):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                return
+            rel = "index.html" if path in ("", "/") else (
+                path[len("/static/") :] if path.startswith("/static/") else path
+            )
+            safe = Path(rel.lstrip("/"))
+            full = (STATIC_DIR / safe).resolve()
+            if full.exists() and str(full).startswith(str(STATIC_DIR.resolve())):
+                ctype = {
+                    ".html": "text/html; charset=utf-8",
+                    ".js": "application/javascript; charset=utf-8",
+                    ".css": "text/css; charset=utf-8",
+                    ".png": "image/png",
+                    ".ico": "image/x-icon",
+                }.get(full.suffix, "application/octet-stream")
+                body = full.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                return
+            self.send_error(404)
+        except Exception:
+            self.send_error(500)
 
 
 def run_web(host: str = "127.0.0.1", port: int = 8000, offline: bool = False) -> None:

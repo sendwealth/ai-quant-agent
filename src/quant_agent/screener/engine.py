@@ -327,6 +327,7 @@ class ScreeningEngine:
         top_n: int | None = None,
         include_fundamentals: bool = False,
         days: int = 120,
+        time_budget: float | None = None,
     ) -> ScreeningResult:
         """Run the full screening pipeline.
 
@@ -336,6 +337,8 @@ class ScreeningEngine:
             top_n: Number of top stocks to return (default from config).
             include_fundamentals: Fetch FinancialSnapshots for scoring.
             days: Price history length to fetch.
+            time_budget: 批量取数的时间预算（秒）。超过即停止收集、
+                保证智能选股「尽快出结果」而非永久卡死。None 表示不限制。
 
         Returns:
             ScreeningResult with ranked stock scores.
@@ -376,7 +379,9 @@ class ScreeningEngine:
 
             # 3. Batch fetch price data
             self._logger.info("Fetching price data for %d stocks...", len(codes))
-            price_data = self.data.get_multi_price(codes, days=days)
+            price_data = self.data.get_multi_price(
+                codes, days=days, time_budget=time_budget
+            )
             self._logger.info("Fetched price data for %d stocks", len(price_data))
 
             # 4. Price/liquidity filter
