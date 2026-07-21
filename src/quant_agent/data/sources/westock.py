@@ -197,7 +197,7 @@ class WeStockSource(DataSource):
                     err = proc.stderr.strip() or proc.stdout.strip()
                     raise RuntimeError(f"CLI exit {proc.returncode}: {err[:200]}")
                 return proc.stdout
-            except (_RETRYABLE, subprocess.TimeoutExpired) as e:
+            except (*_RETRYABLE, subprocess.TimeoutExpired) as e:
                 last_err = e
                 if attempt < self.max_retries:
                     wait = 2 ** (attempt - 1)
@@ -440,7 +440,7 @@ class WeStockSource(DataSource):
             df = self._query_table("profile", ws_code)
             if df is None or df.empty:
                 return None
-            return df.iloc[0].to_dict()
+            return dict(df.iloc[0].to_dict())
         except Exception as e:
             logger.warning(f"WeStock profile failed for {stock_code}: {e}")
             return None

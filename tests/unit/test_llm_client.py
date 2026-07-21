@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import SecretStr
 
 from quant_agent.llm.client import LLMClient, LLMError, get_llm_client
 
@@ -43,7 +44,7 @@ class TestLLMClientInit:
 
         mock_chat_cls.assert_called_once_with(
             model="gpt-4o",
-            api_key="sk-test-123",
+            api_key=SecretStr("sk-test-123"),
             base_url="https://api.openai.com/v1",
             timeout=30,
             max_retries=2,
@@ -63,7 +64,7 @@ class TestLLMClientInit:
 
         mock_chat_cls.assert_called_once_with(
             model="glm-4-flash",
-            api_key="zhipu-test-key",
+            api_key=SecretStr("zhipu-test-key"),
             base_url="https://open.bigmodel.cn/api/coding/paas/v4",
             timeout=30,
             max_retries=2,
@@ -87,7 +88,7 @@ class TestLLMClientInit:
         client = LLMClient(settings=settings)
 
         call_kwargs = mock_chat_cls.call_args
-        assert call_kwargs[1]["api_key"] == "sk-openai"
+        assert call_kwargs[1]["api_key"] == SecretStr("sk-openai")
         assert call_kwargs[1]["model"] == "gpt-4o"
 
 

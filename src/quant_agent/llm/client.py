@@ -14,7 +14,7 @@ from typing import TypeVar, cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 
 from ..config import Settings, get_settings
 
@@ -70,7 +70,7 @@ class LLMClient:
         self.provider = provider
         self.llm = ChatOpenAI(
             model=model,
-            api_key=api_key,
+            api_key=SecretStr(api_key),
             base_url=base_url,
             timeout=self.settings.llm_timeout,
             max_retries=self.settings.llm_max_retries,
