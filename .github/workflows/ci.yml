@@ -68,7 +68,7 @@ jobs:
       - name: Run tests (smoke excluded, network disabled)
         run: uv run pytest -q --cov=quant_agent --cov-report=xml --cov-fail-under=70
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-py${{ matrix.python-version }}
           path: htmlcov
@@ -85,7 +85,7 @@ jobs:
       - name: Build sdist & wheel
         run: uv build
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/*
