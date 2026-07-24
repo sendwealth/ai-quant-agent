@@ -3,67 +3,126 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AI Quant Agent · 量化分析</title>
+  <title>AI Quant Agent · 量化研究工作台</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">📈 AI Quant Agent</div>
-    <nav class="tabs">
-      <button class="tab active" data-tab="analyze">个股分析</button>
-      <button class="tab" data-tab="screen">智能选股</button>
-      <button class="tab" data-tab="reports">历史报告</button>
-    </nav>
-    <div class="status" id="status-bar">连接中…</div>
-  </header>
-
-  <main>
-    <!-- 个股分析 -->
-    <section class="panel active" id="tab-analyze">
-      <div class="card">
-        <form id="analyze-form" class="row">
-          <div class="autocomplete">
-            <input id="stock-code" type="text" autocomplete="off"
-                   placeholder="输入代码或名称，如 600519 / 茅台" />
-            <ul id="stock-suggest" class="suggest hidden"></ul>
-          </div>
-          <input id="analyze-days" type="number" value="120" min="20" max="500" title="分析天数" />
-          <label class="chk"><input type="checkbox" id="analyze-offline" /> 离线</label>
-          <label class="chk"><input type="checkbox" id="analyze-chart" checked /> 走势图</label>
-          <button type="submit" class="btn primary">分析</button>
-        </form>
-        <div class="quick">
-          快捷：<a data-code="600519">600519 茅台</a>
-          <a data-code="300750">300750 宁德</a>
-          <a data-code="000858">000858 五粮液</a>
+  <div class="app">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">◆</div>
+        <div class="brand-text">
+          <span class="brand-name">AI Quant Agent</span>
+          <span class="brand-sub">量化研究工作台</span>
         </div>
       </div>
-      <div id="analyze-result" class="result"></div>
-    </section>
 
-    <!-- 智能选股 -->
-    <section class="panel" id="tab-screen">
-      <div class="card">
-        <form id="screen-form" class="row">
-          <label>数量 <input id="screen-top" type="number" value="10" min="1" max="50" /></label>
-          <label class="chk"><input type="checkbox" id="screen-full" /> 全市场</label>
-          <label class="chk"><input type="checkbox" id="screen-fund" /> 含基本面</label>
-          <label class="chk"><input type="checkbox" id="screen-deep" /> 深度分析</label>
-          <button type="submit" class="btn primary">选股</button>
-        </form>
-      </div>
-      <div id="screen-result" class="result"></div>
-    </section>
+      <nav class="nav">
+        <button class="nav-item active" data-tab="analyze">
+          <span class="nav-ico">📊</span><span class="nav-label">个股分析</span>
+        </button>
+        <button class="nav-item" data-tab="screen">
+          <span class="nav-ico">🔎</span><span class="nav-label">智能选股</span>
+        </button>
+        <button class="nav-item" data-tab="reports">
+          <span class="nav-ico">🗂️</span><span class="nav-label">历史报告</span>
+        </button>
+      </nav>
 
-    <!-- 历史报告 -->
-    <section class="panel" id="tab-reports">
-      <div class="card row">
-        <button id="reports-refresh" class="btn">刷新</button>
-        <span class="hint">点击任意报告查看详情</span>
+      <div class="sidebar-footer">
+        <div class="status-chip" id="status-bar">连接中…</div>
+        <p class="disclaimer">仅供研究 · 非投资建议</p>
       </div>
-      <div id="reports-result" class="result"></div>
-    </section>
-  </main>
+    </aside>
+
+    <!-- 主区 -->
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <h1 class="page-title" id="page-title">个股分析</h1>
+          <p class="page-sub" id="page-sub">规则引擎 + LLM 多智能体共识分析</p>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn ghost" id="offline-toggle" title="切换离线模式">● 在线</button>
+        </div>
+      </header>
+
+      <div class="view-container">
+        <!-- 个股分析 -->
+        <section class="panel active" id="tab-analyze">
+          <div class="card">
+            <form id="analyze-form" class="analyze-grid">
+              <div class="autocomplete field-grow">
+                <label class="field-label">股票代码 / 名称</label>
+                <input id="stock-code" type="text" autocomplete="off"
+                       placeholder="如 600519 / 贵州茅台" />
+                <ul id="stock-suggest" class="suggest hidden"></ul>
+              </div>
+              <div class="field">
+                <label class="field-label">分析天数</label>
+                <input id="analyze-days" type="number" value="120" min="20" max="500" />
+              </div>
+              <div class="field field-toggles">
+                <label class="field-label">选项</label>
+                <div class="toggles">
+                  <label class="chk"><input type="checkbox" id="analyze-offline" /> 离线</label>
+                  <label class="chk"><input type="checkbox" id="analyze-chart" checked /> 走势图</label>
+                </div>
+              </div>
+              <div class="field field-submit">
+                <label class="field-label">&nbsp;</label>
+                <button type="submit" class="btn primary">开始分析</button>
+              </div>
+            </form>
+            <div class="quick">
+              <span class="quick-label">快捷标的</span>
+              <a data-code="600519">600519 茅台</a>
+              <a data-code="300750">300750 宁德时代</a>
+              <a data-code="000858">000858 五粮液</a>
+              <a data-code="601318">601318 平安</a>
+            </div>
+          </div>
+          <div id="analyze-result" class="result"></div>
+        </section>
+
+        <!-- 智能选股 -->
+        <section class="panel" id="tab-screen">
+          <div class="card">
+            <form id="screen-form" class="screen-grid">
+              <div class="field">
+                <label class="field-label">数量 Top</label>
+                <input id="screen-top" type="number" value="10" min="1" max="50" />
+              </div>
+              <div class="field field-toggles field-grow">
+                <label class="field-label">筛选维度</label>
+                <div class="toggles">
+                  <label class="chk"><input type="checkbox" id="screen-full" /> 全市场</label>
+                  <label class="chk"><input type="checkbox" id="screen-fund" /> 含基本面</label>
+                  <label class="chk"><input type="checkbox" id="screen-deep" /> 深度分析</label>
+                </div>
+              </div>
+              <div class="field field-submit">
+                <label class="field-label">&nbsp;</label>
+                <button type="submit" class="btn primary">执行选股</button>
+              </div>
+            </form>
+          </div>
+          <div id="screen-result" class="result"></div>
+        </section>
+
+        <!-- 历史报告 -->
+        <section class="panel" id="tab-reports">
+          <div class="card row">
+            <button id="reports-refresh" class="btn">刷新列表</button>
+            <span class="hint">点击任意报告查看完整分析</span>
+          </div>
+          <div id="reports-result" class="result"></div>
+        </section>
+      </div>
+    </main>
+  </div>
 
   <div id="toast" class="toast hidden"></div>
 

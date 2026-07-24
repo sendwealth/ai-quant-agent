@@ -2,15 +2,33 @@
 
 const $ = (sel) => document.querySelector(sel);
 
+const PAGE_META = {
+  analyze: ["个股分析", "规则引擎 + LLM 多智能体共识分析"],
+  screen: ["智能选股", "技术 / 动量 / 流动性 / 基本面四维评分"],
+  reports: ["历史报告", "历次分析结果的归档与回溯"],
+};
+
 // ── Tab 切换 ──
-document.querySelectorAll(".tab").forEach((t) => {
+document.querySelectorAll(".nav-item").forEach((t) => {
   t.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+    document.querySelectorAll(".nav-item").forEach((x) => x.classList.remove("active"));
     document.querySelectorAll(".panel").forEach((x) => x.classList.remove("active"));
     t.classList.add("active");
-    $("#tab-" + t.dataset.tab).classList.add("active");
-    if (t.dataset.tab === "reports") loadReports();
+    const tab = t.dataset.tab;
+    $("#tab-" + tab).classList.add("active");
+    const [title, sub] = PAGE_META[tab] || ["", ""];
+    $("#page-title").textContent = title;
+    $("#page-sub").textContent = sub;
+    if (tab === "reports") loadReports();
   });
+});
+
+// ── 离线模式开关 ──
+const offlineBtn = $("#offline-toggle");
+offlineBtn.addEventListener("click", () => {
+  const on = offlineBtn.classList.toggle("offline");
+  $("#analyze-offline").checked = on;
+  offlineBtn.textContent = on ? "● 离线" : "● 在线";
 });
 
 // ── 轻量 Markdown 渲染 ──
@@ -20,7 +38,6 @@ function escapeHtml(s) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }
-// 行内：粗体 **x** / 代码 `x`
 function inline(s) {
   return escapeHtml(s)
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
@@ -31,22 +48,16 @@ function renderMarkdown(md) {
   const out = [];
   let i = 0;
   let inList = false;
-  const closeList = () => {
-    if (inList) { out.push("</ul>"); inList = false; }
-  };
-  // 解析表格行：去掉首尾的 | 后按 | 切分
+  const closeList = () => { if (inList) { out.push("</ul>"); inList = false; } };
   const parseRow = (line) => {
     let s = line.trim();
     if (s.startsWith("|")) s = s.slice(1);
     if (s.endsWith("|")) s = s.slice(0, -1);
     return s.split("|").map((c) => c.trim());
   };
-  // 分隔符行判定：每格均为 --- / :-- / --: 形式
-  const isSep = (cells) =>
-    cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c));
+  const isSep = (cells) => cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c));
   while (i < lines.length) {
     const line = lines[i].replace(/\s+$/, "");
-    // 表格检测：当前行为表头，下一行为分隔符行
     if (line.startsWith("|") && i + 1 < lines.length) {
       const headerCells = parseRow(line);
       const sepCells = parseRow(lines[i + 1]);
@@ -55,7 +66,7 @@ function renderMarkdown(md) {
         let html = '<table class="md-table"><thead><tr>';
         html += headerCells.map((c) => `<th>${inline(c)}</th>`).join("");
         html += "</tr></thead><tbody>";
-        i += 2; // 跳过表头 + 分隔符
+        i += 2;
         while (i < lines.length) {
           const rline = lines[i].replace(/\s+$/, "");
           if (rline.trim() === "" || !rline.includes("|")) break;
@@ -70,7 +81,6 @@ function renderMarkdown(md) {
         continue;
       }
     }
-    // 普通块级渲染
     if (line.startsWith("### ")) {
       closeList(); out.push(`<h3>${inline(line.slice(4))}</h3>`);
     } else if (line.startsWith("## ")) {
@@ -93,22 +103,32 @@ function renderMarkdown(md) {
   return out.join("\n");
 }
 
+// ── 评分条 ──
+function scoreBar(v, sm) {
+  const n = Number(v);
+  if (!isFinite(n)) return '<span class="score-cell"><span class="val">-</span></span>';
+  const cls = n >= 70 ? "hi" : n >= 40 ? "mid" : "lo";
+  const w = Math.max(2, Math.min(100, n));
+  return `<span class="score-cell"><span class="score-bar ${sm ? "sm " : ""}${cls}"><span style="width:${w}%"></span></span><span class="val num">${n.toFixed(1)}</span></span>`;
+}
+
 // ── 工具 ──
 function toast(msg) {
   const el = $("#toast");
   el.textContent = msg;
   el.classList.remove("hidden");
-  setTimeout(() => el.classList.add("hidden"), 2600);
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.add("hidden"), 2600);
 }
 function setStatus(ok, text) {
   const el = $("#status-bar");
-  el.className = "status " + (ok ? "ok" : "err");
+  el.className = "status-chip " + (ok ? "ok" : "err");
   el.textContent = text;
 }
 async function api(path, opts) {
   const res = await fetch(path, opts);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+  if (!res.ok) throw new Error(data.error || "HTTP " + res.status);
   return data;
 }
 
@@ -116,7 +136,7 @@ async function api(path, opts) {
 async function health() {
   try {
     const d = await api("/api/health");
-    const llm = d.llm_enabled ? "LLM 已启用" : "规则增强(无 LLM)";
+    const llm = d.llm_enabled ? "LLM 已启用" : "规则增强";
     setStatus(true, `就绪 · ${llm}${d.offline_mode ? " · 离线" : ""}`);
   } catch (e) {
     setStatus(false, "服务未连接");
@@ -141,7 +161,7 @@ $("#analyze-form").addEventListener("submit", async (e) => {
     });
     if (d.error) throw new Error(d.error);
     const rep = d.report || {};
-    const sig = (rep.signal || "HOLD");
+    const sig = rep.signal || "HOLD";
     let md = d.markdown;
     if (!md) {
       if (rep && Object.keys(rep).length) {
@@ -156,9 +176,7 @@ $("#analyze-form").addEventListener("submit", async (e) => {
       html += `<div class="watermark">⚠️ <strong>数据可信警示</strong>：本报告基于受限/合成数据，不构成投资建议。</div>`;
     }
     html += `<div class="report-card">${renderMarkdown(md)}</div>`;
-    if (d.chart_url) {
-      html += `<img class="chart-img" src="${d.chart_url}" alt="走势图" />`;
-    }
+    if (d.chart_url) html += `<img class="chart-img" src="${d.chart_url}" alt="走势图" />`;
     box.innerHTML = html;
     toast(`分析完成：${sig}`);
   } catch (e) {
@@ -177,10 +195,10 @@ document.querySelectorAll(".quick a").forEach((a) => {
 (function setupAutocomplete() {
   const input = $("#stock-code");
   const box = $("#stock-suggest");
-  let items = [];       // 当前候选 [{code, name}]
-  let active = -1;      // 高亮索引
-  let timer = null;     // 防抖计时器
-  let seq = 0;          // 请求序号，避免乱序覆盖
+  let items = [];
+  let active = -1;
+  let timer = null;
+  let seq = 0;
 
   const hide = () => { box.classList.add("hidden"); box.innerHTML = ""; items = []; active = -1; };
 
@@ -195,7 +213,6 @@ document.querySelectorAll(".quick a").forEach((a) => {
       .join("");
     box.classList.remove("hidden");
   }
-
   function choose(i) {
     const s = items[i];
     if (!s) return;
@@ -203,46 +220,33 @@ document.querySelectorAll(".quick a").forEach((a) => {
     hide();
     $("#analyze-form").requestSubmit();
   }
-
   async function search(q) {
     const mySeq = ++seq;
     try {
       const d = await api("/api/search?q=" + encodeURIComponent(q) + "&limit=10");
-      if (mySeq !== seq) return; // 已有更新的请求，丢弃旧结果
+      if (mySeq !== seq) return;
       items = d.results || [];
       active = -1;
       render();
-    } catch (e) {
-      hide();
-    }
+    } catch (e) { hide(); }
   }
-
   input.addEventListener("input", () => {
     const q = input.value.trim();
     clearTimeout(timer);
     if (!q) { hide(); return; }
     timer = setTimeout(() => search(q), 180);
   });
-
   input.addEventListener("keydown", (e) => {
     if (box.classList.contains("hidden") || !items.length) return;
-    if (e.key === "ArrowDown") {
-      e.preventDefault(); active = (active + 1) % items.length; render();
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault(); active = (active - 1 + items.length) % items.length; render();
-    } else if (e.key === "Enter") {
-      if (active >= 0) { e.preventDefault(); choose(active); }
-    } else if (e.key === "Escape") {
-      hide();
-    }
+    if (e.key === "ArrowDown") { e.preventDefault(); active = (active + 1) % items.length; render(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); active = (active - 1 + items.length) % items.length; render(); }
+    else if (e.key === "Enter") { if (active >= 0) { e.preventDefault(); choose(active); } }
+    else if (e.key === "Escape") { hide(); }
   });
-
   box.addEventListener("mousedown", (e) => {
-    // mousedown 先于 blur，避免下拉在点击前消失
     const li = e.target.closest(".suggest-item");
     if (li) { e.preventDefault(); choose(+li.dataset.i); }
   });
-
   input.addEventListener("blur", () => setTimeout(hide, 120));
 })();
 
@@ -260,15 +264,15 @@ $("#screen-form").addEventListener("submit", async (e) => {
     const d = await api("/api/screen?" + q.toString());
     const rows = (d.top_stocks || []).map((s, i) => `
       <tr>
-        <td>${i + 1}</td>
+        <td class="rank num">${i + 1}</td>
         <td class="code">${s.stock_code}</td>
         <td class="name">${s.name ? escapeHtml(s.name) : "-"}</td>
-        <td>${s.price != null ? Number(s.price).toFixed(2) : "-"}</td>
-        <td class="score">${s.total_score != null ? Number(s.total_score).toFixed(1) : "-"}</td>
-        <td>${s.technical_score ?? "-"}</td>
-        <td>${s.momentum_score ?? "-"}</td>
-        <td>${s.liquidity_score ?? "-"}</td>
-        <td>${s.fundamental_score ?? "-"}</td>
+        <td class="num">${s.price != null ? Number(s.price).toFixed(2) : "-"}</td>
+        <td>${scoreBar(s.total_score)}</td>
+        <td>${scoreBar(s.technical_score, true)}</td>
+        <td>${scoreBar(s.momentum_score, true)}</td>
+        <td>${scoreBar(s.liquidity_score, true)}</td>
+        <td>${scoreBar(s.fundamental_score, true)}</td>
       </tr>`).join("");
     if (!rows) {
       box.innerHTML = '<div class="loading">无结果（联网受限时选股池为空，属正常；请在联网环境使用）</div>';
@@ -276,15 +280,24 @@ $("#screen-form").addEventListener("submit", async (e) => {
     }
     let html = `<div class="report-card"><h2>智能选股 Top ${d.top_stocks.length}</h2>
       <table class="grid">
-        <thead><tr><th>#</th><th>代码</th><th>名称</th><th>价格</th><th>评分</th><th>技术</th><th>动量</th><th>流动</th><th>基本</th></tr></thead>
+        <thead><tr><th>#</th><th>代码</th><th>名称</th><th>价格</th><th>综合评分</th><th>技术</th><th>动量</th><th>流动</th><th>基本</th></tr></thead>
         <tbody>${rows}</tbody></table></div>`;
     if (d.deep_reports && d.deep_reports.length) {
-      html += '<h2 style="margin-top:1.5rem;color:var(--accent)">深度分析</h2>';
+      html += '<h2 style="margin-top:1.6rem;color:var(--accent-2)">深度分析</h2>';
       d.deep_reports.forEach((r) => {
-        html += `<div class="report-card" style="margin-top:.8rem">${renderMarkdown(r.report ? "" : "")}`;
-        const sig = r.report && r.report.signal ? r.report.signal : "HOLD";
+        const rep = r.report || {};
+        const sig = rep.signal || "HOLD";
         const nm = r.name ? ` ${escapeHtml(r.name)}` : "";
-        html += `<p><span class="badge ${sig}">${sig}</span> ${r.stock_code}${nm}</p></div>`;
+        const conf = rep.confidence != null ? (rep.confidence * 100).toFixed(0) : "?";
+        const pos = rep.position_pct != null ? rep.position_pct : "?";
+        html += `<div class="report-card" style="margin-top:.9rem">
+          <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+            <span class="badge ${sig}">${sig}</span>
+            <strong class="num">${r.stock_code}</strong><span class="meta">${nm}</span>
+            <span class="meta" style="margin-left:auto">信心 ${conf}% · 仓位 ${pos}%</span>
+          </div>
+          ${rep.llm_analysis ? `<div style="margin-top:.8rem">${renderMarkdown(rep.llm_analysis)}</div>` : ""}
+        </div>`;
       });
     }
     box.innerHTML = html;
@@ -308,11 +321,11 @@ async function loadReports() {
     box.innerHTML = list.map((e) => `
       <div class="report-item" data-file="${encodeURIComponent(e.file)}">
         <div>
-          <strong>${e.stock_code}</strong>
+          <strong class="num">${e.stock_code}</strong>
           <span class="badge ${e.signal}">${e.signal}</span>
-          <span class="meta"> · 信心 ${(e.confidence * 100).toFixed(0)}%</span>
+          <span class="meta"> · 信心 <span class="num">${(e.confidence * 100).toFixed(0)}%</span></span>
         </div>
-        <div class="meta">${e.timestamp}</div>
+        <div class="meta num">${e.timestamp}</div>
       </div>`).join("");
     box.querySelectorAll(".report-item").forEach((it) => {
       it.addEventListener("click", () => showReport(it.dataset.file));
@@ -328,7 +341,7 @@ async function showReport(file) {
   try {
     const d = await api("/api/report?file=" + file);
     box.innerHTML = `<div class="report-card">${renderMarkdown(d.markdown)}</div>
-      <button class="btn" style="margin-top:.8rem" onclick="loadReports()">← 返回列表</button>`;
+      <button class="btn" style="margin-top:.9rem" onclick="loadReports()">← 返回列表</button>`;
   } catch (e) {
     box.innerHTML = `<div class="error-box">加载失败：${escapeHtml(e.message)}</div>`;
   }
